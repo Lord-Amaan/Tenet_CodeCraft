@@ -184,237 +184,36 @@
   transform: translateY(-1px);
 }
 
-/* ── Controls card ──────────────────────────────────────────────────────── */
+/* ── Minimap card ──────────────────────────────────────────────────────── */
 
-/* Slideshow header */
-.hud-slide-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(212,180,80,0.1);
-}
-.hud-slide-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: rgba(90,186,80,0.18);
-  border: 1.5px solid rgba(90,186,80,0.4);
-  color: #5aba50;
-  font-family: 'Cinzel', serif;
-  font-size: 13px;
-  font-weight: 900;
-  text-shadow: 0 0 10px rgba(90,186,80,0.6);
-  flex-shrink: 0;
-}
-.hud-slide-title {
-  font-family: 'Cinzel Decorative', serif;
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  background-image: linear-gradient(170deg, #fff8d8 0%, #ffe080 18%, #d4a828 40%, #f5d040 58%, #b07818 78%, #7a5218 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 16px rgba(212,180,80,0.7));
-}
-
-/* Slide content */
-.hud-slide-content {
-  animation: slideFadeIn 0.4s ease-out;
-}
-@keyframes slideFadeIn {
-  from { opacity: 0; transform: translateX(12px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
-/* Visual area */
-.slide-visual {
-  background: rgba(0,0,0,0.35);
-  border: 1px solid rgba(212,180,80,0.1);
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 90px;
-}
-
-/* Grid for claim/knockout/grow slides */
-.slide-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-  width: 100%;
-  max-width: 200px;
-}
-.slide-cell {
-  aspect-ratio: 1;
-  border-radius: 3px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
+.hud-minimap-wrap {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.slide-cell.owned {
-  background: rgba(90,186,80,0.3);
-  border-color: rgba(90,186,80,0.5);
-  box-shadow: inset 0 0 6px rgba(90,186,80,0.2);
-}
-.slide-cell.trail {
-  background: rgba(90,186,80,0.15);
-  border-color: rgba(90,186,80,0.35);
-  animation: trailBlink 1.2s ease-in-out infinite;
-}
-@keyframes trailBlink {
-  0%,100% { opacity: 0.6; }
-  50%     { opacity: 1; }
-}
-.slide-cell.enemy-trail {
-  background: rgba(232,64,64,0.25);
-  border-color: rgba(232,64,64,0.45);
-}
-.slide-cell.enemy-base {
-  background: rgba(56,168,248,0.25);
-  border-color: rgba(56,168,248,0.4);
-}
-.slide-cell.enemy {
-  background: rgba(232,64,64,0.3);
-  border-color: rgba(232,64,64,0.5);
-}
-.slide-cell.attacker {
-  background: rgba(255,200,60,0.35);
-  border-color: rgba(255,200,60,0.6);
-}
-.slide-cell.crown {
-  background: rgba(212,180,80,0.25);
-  border-color: rgba(212,180,80,0.5);
-}
-.slide-player-icon {
-  font-size: 10px;
-  line-height: 1;
-  filter: drop-shadow(0 0 4px rgba(90,186,80,0.8));
-  animation: playerBounce 1.5s ease-in-out infinite;
-}
-.slide-player-icon.attack {
-  filter: drop-shadow(0 0 6px rgba(255,200,60,0.9));
-}
-.slide-player-icon.enemy-icon {
-  filter: drop-shadow(0 0 4px rgba(232,64,64,0.8));
-}
-@keyframes playerBounce {
-  0%,100% { transform: scale(1); }
-  50%     { transform: scale(1.2); }
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(212,180,80,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
 }
 
-/* Slide description */
-.hud-slide-desc {
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(212,180,80,0.55);
-  letter-spacing: 0.5px;
-  line-height: 1.5;
-  margin-bottom: 8px;
-  text-align: center;
-}
-
-/* Dots navigation */
-.hud-slide-dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-.hud-slide-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(212,180,80,0.25);
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-  transition: all 0.25s;
-}
-.hud-slide-dot:hover {
-  border-color: rgba(212,180,80,0.5);
-  background: rgba(212,180,80,0.15);
-}
-.hud-slide-dot.active {
-  background: #f0d048;
-  border-color: #f0d048;
-  box-shadow: 0 0 8px rgba(240,208,72,0.5);
-}
-
-/* Controls slide (WASD/Arrow keys) */
-.slide-controls-visual {
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 8px;
-}
-.slide-keys-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+.hud-minimap-canvas {
+  display: block;
   width: 100%;
+  height: auto;
+  border-radius: 7px;
 }
-.slide-keys-label {
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 4px;
-  text-transform: uppercase;
-  color: rgba(90,186,80,0.7);
-  text-shadow: 0 0 10px rgba(90,186,80,0.35);
-}
-.slide-keys-row {
+
+.hud-minimap-loading {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-.slide-keys-or {
+  justify-content: center;
   font-family: 'Rajdhani', sans-serif;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: rgba(212,180,80,0.4);
   letter-spacing: 2px;
-}
-.slide-key-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-}
-.slide-key-grid kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 4px;
-  background: rgba(212,180,80,0.07);
-  border: 1.5px solid rgba(212,180,80,0.22);
-  border-radius: 5px;
-  color: #f5e8b0;
-  font-family: 'Cinzel', serif;
-  font-size: 10px;
-  font-weight: 600;
-  text-shadow: 0 0 8px rgba(212,180,80,0.3);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,245,180,0.06);
-}
-.slide-key-grid span {
-  min-width: 26px;
-  height: 26px;
+  text-transform: uppercase;
 }
 
 .hud-leave-btn {

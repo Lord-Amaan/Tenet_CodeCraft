@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import '../styles/HUD.css';
 
 /* ── Load Google Fonts (same as Menu) ──────────────────────────────── */
@@ -9,126 +9,111 @@ if (typeof document !== "undefined" && !document.getElementById("gol-fonts")) {
   document.head.appendChild(l);
 }
 
-const SLIDES = [
-  {
-    num: 1,
-    title: "CLAIM LAND",
-    icon: "🏴",
-    desc: "Move outside your territory to draw a trail, then return to claim all enclosed land as yours.",
-    visual: (
-      <div className="slide-visual slide-claim">
-        <div className="slide-grid">
-          {Array.from({ length: 35 }, (_, i) => {
-            const r = Math.floor(i / 7), c = i % 7;
-            const owned = (r >= 2 && r <= 4 && c >= 1 && c <= 3);
-            const trail = (r === 2 && c === 4) || (r === 1 && c === 4) || (r === 1 && c === 5);
-            const player = (r === 1 && c === 5);
-            return (
-              <div key={i} className={`slide-cell${owned ? " owned" : ""}${trail ? " trail" : ""}${player ? " player" : ""}`}>
-                {player && <div className="slide-player-icon">▶</div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    ),
-  },
-  {
-    num: 2,
-    title: "KNOCKOUT PLAYERS",
-    icon: "⚔️",
-    desc: "Cross an opponent's trail before they close it to eliminate them and steal their territory.",
-    visual: (
-      <div className="slide-visual slide-knockout">
-        <div className="slide-grid">
-          {Array.from({ length: 35 }, (_, i) => {
-            const r = Math.floor(i / 7), c = i % 7;
-            const enemyTrail = (r === 2 && c >= 1 && c <= 5);
-            const enemy = (r === 2 && c === 5);
-            const player = (r === 2 && c === 3);
-            const enemyBase = (r >= 1 && r <= 3 && c === 6);
-            return (
-              <div key={i} className={`slide-cell${enemyTrail ? " enemy-trail" : ""}${enemy ? " enemy" : ""}${enemyBase ? " enemy-base" : ""}${player ? " attacker" : ""}`}>
-                {player && <div className="slide-player-icon attack">💥</div>}
-                {enemy && !player && <div className="slide-player-icon enemy-icon">◀</div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    ),
-  },
-  {
-    num: 3,
-    title: "GROW TERRITORY",
-    icon: "👑",
-    desc: "The more land you claim, the higher your score. Dominate the map to top the leaderboard!",
-    visual: (
-      <div className="slide-visual slide-grow">
-        <div className="slide-grid">
-          {Array.from({ length: 35 }, (_, i) => {
-            const r = Math.floor(i / 7), c = i % 7;
-            const zone1 = (r >= 0 && r <= 2 && c >= 0 && c <= 2);
-            const zone2 = (r >= 2 && r <= 4 && c >= 4 && c <= 6);
-            const crown = (r === 1 && c === 1);
-            return (
-              <div key={i} className={`slide-cell${zone1 ? " owned" : ""}${zone2 ? " enemy-base" : ""}${crown ? " crown" : ""}`}>
-                {crown && <div className="slide-player-icon">👑</div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    ),
-  },
-  {
-    num: 4,
-    title: "CONTROLS",
-    icon: "🎮",
-    desc: null,
-    visual: (
-      <div className="slide-visual slide-controls-visual">
-        <div className="slide-keys-group">
-          <div className="slide-keys-label">‹TO MOVE›</div>
-          <div className="slide-keys-row">
-            <div className="slide-keys-wasd">
-              <div className="slide-key-grid">
-                <span /><kbd>W</kbd><span />
-                <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
-              </div>
-            </div>
-            <span className="slide-keys-or">OR</span>
-            <div className="slide-keys-arrows">
-              <div className="slide-key-grid">
-                <span /><kbd>↑</kbd><span />
-                <kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    ),
-  },
+const MINIMAP_COLORS = [
+  { owned: '#e84040', trail: '#ff6060' },
+  { owned: '#4080e8', trail: '#60a0ff' },
+  { owned: '#40c860', trail: '#60e880' },
+  { owned: '#e8a030', trail: '#ffc050' },
+  { owned: '#a050e0', trail: '#c070ff' },
+  { owned: '#40c8c8', trail: '#60e8e8' },
 ];
 
-export function HUD({ playerName, kills, deaths, score, playerCount, roomCode, onLeaveRoom }) {
+export function HUD({ playerName, kills, deaths, score, playerCount, roomCode, onLeaveRoom, playerId, minimapData }) {
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
   };
 
   const kd = deaths > 0 ? (kills / deaths).toFixed(1) : kills.toFixed(1);
 
-  const [slideIndex, setSlideIndex] = useState(0);
+  // ── Minimap canvas rendering ───────────────────────────────────────────
+  const minimapCanvasRef = useRef(null);
 
-  // Auto-advance slides
+  const drawMinimap = useCallback(() => {
+    const canvas = minimapCanvasRef.current;
+    if (!canvas || !minimapData) return;
+
+    const ctx = canvas.getContext('2d');
+    const { cols, rows, players } = minimapData;
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const scaleX = cw / cols;
+    const scaleY = ch / rows;
+
+    // Background
+    ctx.fillStyle = 'rgba(12,10,6,0.95)';
+    ctx.fillRect(0, 0, cw, ch);
+
+    // Grid lines (subtle)
+    ctx.strokeStyle = 'rgba(212,180,80,0.06)';
+    ctx.lineWidth = 0.5;
+    const gridStep = Math.max(Math.floor(cols / 10), 1);
+    for (let c = 0; c <= cols; c += gridStep) {
+      const x = c * scaleX;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ch); ctx.stroke();
+    }
+    const gridStepY = Math.max(Math.floor(rows / 8), 1);
+    for (let r = 0; r <= rows; r += gridStepY) {
+      const y = r * scaleY;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cw, y); ctx.stroke();
+    }
+
+    // Draw owned territories and trails
+    for (const p of players) {
+      const pc = MINIMAP_COLORS[p.colorIndex] || MINIMAP_COLORS[0];
+      const isLocal = p.id === playerId;
+
+      // Owned tiles
+      if (p.owned.length > 0) {
+        ctx.fillStyle = isLocal ? pc.owned : pc.owned + '99';
+        for (const k of p.owned) {
+          const [cx, cy] = k.split(',').map(Number);
+          ctx.fillRect(cx * scaleX, cy * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
+        }
+      }
+
+      // Trail tiles
+      if (p.trail.length > 0) {
+        ctx.fillStyle = pc.trail + 'aa';
+        for (const k of p.trail) {
+          const [cx, cy] = k.split(',').map(Number);
+          ctx.fillRect(cx * scaleX, cy * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
+        }
+      }
+    }
+
+    // Draw player positions (dots)
+    for (const p of players) {
+      const pc = MINIMAP_COLORS[p.colorIndex] || MINIMAP_COLORS[0];
+      const isLocal = p.id === playerId;
+      const px = p.x * scaleX + scaleX / 2;
+      const py = p.y * scaleY + scaleY / 2;
+      const dotR = isLocal ? 4 : 3;
+
+      // Glow
+      ctx.beginPath();
+      ctx.arc(px, py, dotR + 3, 0, Math.PI * 2);
+      ctx.fillStyle = isLocal ? 'rgba(255,255,255,0.25)' : `${pc.owned}44`;
+      ctx.fill();
+
+      // Dot
+      ctx.beginPath();
+      ctx.arc(px, py, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = isLocal ? '#ffffff' : pc.owned;
+      ctx.fill();
+      ctx.strokeStyle = isLocal ? '#f0d048' : 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = isLocal ? 1.5 : 1;
+      ctx.stroke();
+    }
+
+    // Border glow
+    ctx.strokeStyle = 'rgba(212,180,80,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, cw, ch);
+  }, [minimapData, playerId]);
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSlideIndex(prev => (prev + 1) % SLIDES.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const slide = SLIDES[slideIndex];
+    drawMinimap();
+  }, [drawMinimap]);
 
   return (
     <div className="hud-container">
@@ -176,25 +161,22 @@ export function HUD({ playerName, kills, deaths, score, playerCount, roomCode, o
         </div>
       </div>
 
-      {/* Instructions slideshow card */}
-      <div className="hud-card hud-controls">
-        <div className="hud-slide-header">
-          <span className="hud-slide-num">{slide.num}</span>
-          <span className="hud-slide-title">{slide.title}</span>
+      {/* Minimap card */}
+      <div className="hud-card hud-minimap">
+        <div className="hud-card-header">
+          <span className="hud-card-icon">&#x1F5FA;</span>
+          <span className="hud-card-title">MAP</span>
         </div>
-        <div className="hud-slide-content" key={slideIndex}>
-          {slide.visual}
-          {slide.desc && <div className="hud-slide-desc">{slide.desc}</div>}
-        </div>
-        {/* Dots */}
-        <div className="hud-slide-dots">
-          {SLIDES.map((_, i) => (
-            <button
-              key={i}
-              className={`hud-slide-dot${i === slideIndex ? " active" : ""}`}
-              onClick={() => setSlideIndex(i)}
-            />
-          ))}
+        <div className="hud-minimap-wrap">
+          <canvas
+            ref={minimapCanvasRef}
+            width={240}
+            height={160}
+            className="hud-minimap-canvas"
+          />
+          {!minimapData && (
+            <div className="hud-minimap-loading">Waiting for data...</div>
+          )}
         </div>
         <button onClick={onLeaveRoom} className="hud-leave-btn">
           EXIT GAME

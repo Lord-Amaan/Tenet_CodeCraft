@@ -34,6 +34,7 @@ function App() {
     deaths: 0,
     score: 0,
     playerCount: 0,
+    minimapData: null,
   });
 
   // Auth state
@@ -195,6 +196,8 @@ function App() {
               playerCount={playerStats.playerCount}
               roomCode={roomCode}
               onLeaveRoom={handleLeaveRoom}
+              playerId={playerId}
+              minimapData={playerStats.minimapData}
             />
           </div>
         </div>
