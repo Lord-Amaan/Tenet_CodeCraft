@@ -20,8 +20,13 @@ export function setupSocketHandlers(io, roomManager) {
     });
 
     // Join a room
-    socket.on('room:join', (roomCode, playerName, callback) => {
-      const result = roomManager.joinRoom(roomCode, socket.id, playerName);
+    socket.on('room:join', (roomCode, playerName, colorIndex, callback) => {
+      // Handle backward compatibility
+      if (typeof colorIndex === 'function') {
+        callback = colorIndex;
+        colorIndex = undefined;
+      }
+      const result = roomManager.joinRoom(roomCode, socket.id, playerName, colorIndex);
       
       if (!result) {
         if (typeof callback === 'function') {

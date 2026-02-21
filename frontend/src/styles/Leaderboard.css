@@ -1,14 +1,16 @@
-/* Leaderboard Component Styles */
+/* Leaderboard — Dark Theme */
 .leaderboard {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: #1a1200;
+  border: 2px solid #b8960a;
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
   z-index: 1000;
-  min-width: 300px;
-  max-width: 400px;
+  min-width: 280px;
+  max-width: 360px;
+  font-family: 'Courier New', monospace;
 }
 
 .leaderboard.collapsed {
@@ -16,73 +18,77 @@
 }
 
 .toggle-btn {
-  padding: 12px 15px;
-  background: #667eea;
-  color: white;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #cc8800, #aa6600);
   border: none;
-  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid #332800;
+  color: #fff;
+  border-radius: 6px 6px 0 0;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: bold;
-  transition: background 0.3s ease;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  transition: all 0.2s;
   width: 100%;
 }
 
 .leaderboard.collapsed .toggle-btn {
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .toggle-btn:hover {
-  background: #764ba2;
+  background: linear-gradient(135deg, #dd9900, #cc8800);
 }
 
 .leaderboard-content {
-  padding: 15px;
-  max-height: 400px;
+  padding: 12px;
+  max-height: 300px;
   overflow-y: auto;
 }
 
 .leaderboard table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .leaderboard th {
-  background: #f5f5f5;
-  padding: 10px;
+  background: #0e0a00;
+  padding: 8px;
   text-align: left;
   font-weight: bold;
-  color: #333;
-  border-bottom: 2px solid #667eea;
+  color: #f0d048;
+  border-bottom: 1px solid #332800;
+  letter-spacing: 1px;
+  font-size: 10px;
 }
 
 .leaderboard td {
-  padding: 8px 10px;
-  border-bottom: 1px solid #eee;
-  color: #666;
+  padding: 7px 8px;
+  border-bottom: 1px solid #1a1200;
+  color: #aa8833;
 }
 
 .leaderboard tr:nth-child(even) {
-  background: #f9f9f9;
+  background: rgba(184,150,10,0.04);
 }
 
 .leaderboard tr.top {
-  background: #fff8e1;
-  font-weight: bold;
+  background: rgba(255,170,68,0.1);
 }
 
 .leaderboard tr.top td:first-child {
-  color: #ffa500;
-  font-size: 16px;
+  color: #ffaa44;
+  font-size: 14px;
 }
 
 .leaderboard .kills {
-  color: #4caf50;
+  color: #44ff88;
   font-weight: bold;
 }
 
 .leaderboard .deaths {
-  color: #f44336;
+  color: #ff4422;
   font-weight: bold;
 }

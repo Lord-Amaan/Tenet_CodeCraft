@@ -35,11 +35,11 @@ class RoomManager {
     return roomCode;
   }
 
-  joinRoom(roomCode, socketId, playerName) {
+  joinRoom(roomCode, socketId, playerName, colorIndex) {
     const room = this.rooms.get(roomCode);
     if (!room) return null;
 
-    const player = room.game.addPlayer(socketId, playerName);
+    const player = room.game.addPlayer(socketId, playerName, colorIndex);
     room.players.set(socketId, player);
 
     // Clear cleanup timer if room was empty

@@ -2,12 +2,22 @@ import { useState, useEffect } from 'react';
 import { socketService } from '../services/socket';
 import '../styles/Menu.css';
 
+const ELEMENTS = [
+  { name: 'LAVA', colorIndex: 0, emoji: '🔥', bg: '#cc2200', border: '#ff4422', glow: 'rgba(255,68,34,0.4)' },
+  { name: 'OCEAN', colorIndex: 1, emoji: '🌊', bg: '#0044cc', border: '#4488ff', glow: 'rgba(68,136,255,0.4)' },
+  { name: 'FUNGI', colorIndex: 2, emoji: '🍄', bg: '#00aa44', border: '#44ff88', glow: 'rgba(68,255,136,0.4)' },
+  { name: 'EARTH', colorIndex: 3, emoji: '🌍', bg: '#cc8800', border: '#ffaa44', glow: 'rgba(255,170,68,0.4)' },
+  { name: 'CRYSTAL', colorIndex: 4, emoji: '💎', bg: '#8800cc', border: '#bb44ff', glow: 'rgba(187,68,255,0.4)' },
+  { name: 'FROST', colorIndex: 5, emoji: '❄️', bg: '#00aaaa', border: '#44ffff', glow: 'rgba(68,255,255,0.4)' },
+];
+
 export function Menu({ onJoinRoom }) {
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('select'); // 'select', 'create', 'join'
+  const [selectedElement, setSelectedElement] = useState(0);
+  const [activeTab, setActiveTab] = useState('select');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -21,32 +31,18 @@ export function Menu({ onJoinRoom }) {
         console.error('Failed to load rooms:', err);
       }
     };
-
     loadRooms();
   }, []);
 
   const handleCreateRoom = async (e) => {
     e.preventDefault();
-    if (!playerName.trim()) {
-      setError('Please enter your name');
-      return;
-    }
-
+    if (!playerName.trim()) { setError('Enter your name to play'); return; }
     setLoading(true);
     setError('');
-
     try {
       socketService.emit('room:create', (data) => {
-        console.log('🎨 Room created:', data);
-        if (!data || !data.roomCode) {
-          setError('Failed to create room');
-          setLoading(false);
-          return;
-        }
-        
-        // Now join the created room
-        socketService.emit('room:join', data.roomCode, playerName, (joinData) => {
-          console.log('🚪 Join response:', joinData);
+        if (!data || !data.roomCode) { setError('Failed to create room'); setLoading(false); return; }
+        socketService.emit('room:join', data.roomCode, playerName, selectedElement, (joinData) => {
           if (joinData && joinData.success) {
             onJoinRoom(joinData.roomCode, playerName, joinData.playerId);
           } else {
@@ -55,28 +51,17 @@ export function Menu({ onJoinRoom }) {
           }
         });
       });
-    } catch (err) {
-      setError('Failed to create room');
-      setLoading(false);
-    }
+    } catch (err) { setError('Failed to create room'); setLoading(false); }
   };
 
   const handleJoinRoom = async (e) => {
     e.preventDefault();
-    if (!playerName.trim()) {
-      setError('Please enter your name');
-      return;
-    }
-    if (!roomCode.trim()) {
-      setError('Please enter a room code');
-      return;
-    }
-
+    if (!playerName.trim()) { setError('Enter your name to play'); return; }
+    if (!roomCode.trim()) { setError('Enter a room code'); return; }
     setLoading(true);
     setError('');
-
     try {
-      socketService.emit('room:join', roomCode.toUpperCase(), playerName, (data) => {
+      socketService.emit('room:join', roomCode.toUpperCase(), playerName, selectedElement, (data) => {
         if (data && data.success) {
           onJoinRoom(data.roomCode, playerName, data.playerId);
         } else {
@@ -84,116 +69,143 @@ export function Menu({ onJoinRoom }) {
           setLoading(false);
         }
       });
-    } catch (err) {
-      console.error('Join room error:', err);
-      setError('Failed to join room');
-      setLoading(false);
-    }
+    } catch (err) { setError('Failed to join room'); setLoading(false); }
   };
 
   const handleQuickJoin = (code) => {
-    setRoomCode(code);
-    setActiveTab('join');
+    if (!playerName.trim()) { setError('Enter your name first'); return; }
+    setLoading(true);
+    setError('');
+    socketService.emit('room:join', code, playerName, selectedElement, (data) => {
+      if (data && data.success) {
+        onJoinRoom(data.roomCode, playerName, data.playerId);
+      } else {
+        setError(data?.error || 'Failed to join room');
+        setLoading(false);
+      }
+    });
   };
 
   return (
     <div className="menu-container">
-      <div className="menu-header">
-        <h1>Land.io - Territory Wars</h1>
-        <p>Claim your territory and dominate the grid!</p>
-      </div>
+      <div className="menu-bg-grid" />
 
-      <div className="menu-content">
-        <div className="player-input">
+      <div className="menu-card">
+        {/* Title */}
+        <div className="menu-title">
+          <span className="title-icon">🍄</span>
+          <h1>LAND<span className="title-dot">.</span>IO</h1>
+          <p className="subtitle">TERRITORY WARS</p>
+        </div>
+
+        {/* Player Name */}
+        <div className="name-section">
+          <label className="field-label">PLAYER NAME</label>
           <input
             type="text"
             value={playerName}
             onChange={(e) => setPlayerName(e.target.value)}
-            placeholder="Enter your player name"
+            placeholder="Enter your name..."
             maxLength="20"
+            className="name-input"
             autoFocus
           />
         </div>
 
-        <div className="tabs">
-          <button
-            className={`tab ${activeTab === 'select' ? 'active' : ''}`}
-            onClick={() => setActiveTab('select')}
-          >
-            Join Room
+        {/* Element Selection */}
+        <div className="element-section">
+          <label className="field-label">CHOOSE YOUR ELEMENT</label>
+          <div className="element-grid">
+            {ELEMENTS.map((el) => (
+              <button
+                key={el.colorIndex}
+                className={`element-card ${selectedElement === el.colorIndex ? 'selected' : ''}`}
+                onClick={() => setSelectedElement(el.colorIndex)}
+                style={{
+                  '--el-bg': el.bg,
+                  '--el-border': el.border,
+                  '--el-glow': el.glow,
+                }}
+              >
+                <span className="element-emoji">{el.emoji}</span>
+                <span className="element-name">{el.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && <div className="menu-error">{error}</div>}
+
+        {/* Room Tabs */}
+        <div className="room-tabs">
+          <button className={`room-tab ${activeTab === 'select' ? 'active' : ''}`} onClick={() => setActiveTab('select')}>
+            BROWSE
           </button>
-          <button
-            className={`tab ${activeTab === 'create' ? 'active' : ''}`}
-            onClick={() => setActiveTab('create')}
-          >
-            Create Room
+          <button className={`room-tab ${activeTab === 'create' ? 'active' : ''}`} onClick={() => setActiveTab('create')}>
+            CREATE
           </button>
-          <button
-            className={`tab ${activeTab === 'join' ? 'active' : ''}`}
-            onClick={() => setActiveTab('join')}
-          >
-            Enter Code
+          <button className={`room-tab ${activeTab === 'join' ? 'active' : ''}`} onClick={() => setActiveTab('join')}>
+            CODE
           </button>
         </div>
 
-        {error && <div className="error-message">{error}</div>}
-
-        {activeTab === 'select' && (
-          <div className="tab-content">
-            <h3>Available Rooms ({rooms.length})</h3>
-            {rooms.length > 0 ? (
-              <div className="rooms-list">
-                {rooms.map((room) => (
-                  <div key={room.code} className="room-card">
-                    <div className="room-info">
-                      <strong className="room-code">{room.code}</strong>
-                      <span className="player-count">
-                        {room.playerCount} player{room.playerCount !== 1 ? 's' : ''}
-                      </span>
+        {/* Tab Content */}
+        <div className="tab-body">
+          {activeTab === 'select' && (
+            <div>
+              {rooms.length > 0 ? (
+                <div className="room-list">
+                  {rooms.map((room) => (
+                    <div key={room.code} className="room-item">
+                      <div>
+                        <span className="room-code-badge">{room.code}</span>
+                        <span className="room-players">{room.playerCount} player{room.playerCount !== 1 ? 's' : ''}</span>
+                      </div>
+                      <button onClick={() => handleQuickJoin(room.code)} disabled={loading} className="join-btn">
+                        JOIN
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleQuickJoin(room.code)}
-                      disabled={loading}
-                      className="join-btn"
-                    >
-                      Join
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="empty-message">No rooms available. Create one!</p>
-            )}
-          </div>
-        )}
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-msg">No rooms yet — create one!</p>
+              )}
+            </div>
+          )}
 
-        {activeTab === 'create' && (
-          <div className="tab-content">
-            <form onSubmit={handleCreateRoom}>
-              <p>Create a new room and invite your friends!</p>
-              <button type="submit" disabled={loading} className="primary-btn">
-                {loading ? 'Creating...' : 'Create Room'}
+          {activeTab === 'create' && (
+            <form onSubmit={handleCreateRoom} className="tab-form">
+              <p className="form-desc">Create a new room and invite friends</p>
+              <button type="submit" disabled={loading} className="action-btn create-btn">
+                {loading ? 'CREATING...' : '⚡ CREATE ROOM'}
               </button>
             </form>
-          </div>
-        )}
+          )}
 
-        {activeTab === 'join' && (
-          <div className="tab-content">
-            <form onSubmit={handleJoinRoom}>
+          {activeTab === 'join' && (
+            <form onSubmit={handleJoinRoom} className="tab-form">
               <input
                 type="text"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                placeholder="Enter room code (e.g., ABC123)"
+                placeholder="ROOM CODE"
                 maxLength="6"
+                className="code-input"
               />
-              <button type="submit" disabled={loading} className="primary-btn">
-                {loading ? 'Joining...' : 'Join Room'}
+              <button type="submit" disabled={loading} className="action-btn join-action-btn">
+                {loading ? 'JOINING...' : '🚀 JOIN ROOM'}
               </button>
             </form>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Controls hint */}
+        <div className="controls-hint">
+          <span>⌨️ WASD / ARROWS to move</span>
+          <span>·</span>
+          <span>Capture territory · Avoid trails</span>
+        </div>
       </div>
     </div>
   );

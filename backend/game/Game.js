@@ -3,26 +3,52 @@ import Player from './Player.js';
 class Game {
   constructor() {
     this.players = new Map();
-    this.cols = 20;
-    this.rows = 14;
+    this.cols = 90;
+    this.rows = 60;
     this.nextColorIndex = 0;
+    this.totalColors = 6;
+    this.moveInterval = 150; // ms between moves (controls player speed)
+    this.lastMoveTime = 0;
 
     this.spawnPositions = [
-      { x: 3, y: 3 },
-      { x: 16, y: 10 },
-      { x: 3, y: 10 },
-      { x: 16, y: 3 },
-      { x: 10, y: 7 },
-      { x: 10, y: 3 },
+      { x: 10, y: 10 },
+      { x: 75, y: 50 },
+      { x: 10, y: 50 },
+      { x: 75, y: 10 },
+      { x: 45, y: 30 },
+      { x: 45, y: 10 },
+      { x: 20, y: 30 },
+      { x: 70, y: 30 },
+      { x: 30, y: 45 },
+      { x: 60, y: 15 },
     ];
   }
 
-  addPlayer(socketId, playerName) {
+  getUsedColors() {
+    const used = new Set();
+    for (const player of this.players.values()) {
+      used.add(player.colorIndex);
+    }
+    return used;
+  }
+
+  _getAvailableColor(preferredIndex) {
+    const used = this.getUsedColors();
+    if (preferredIndex !== undefined && preferredIndex !== null && !used.has(preferredIndex)) {
+      return preferredIndex;
+    }
+    for (let i = 0; i < this.totalColors; i++) {
+      if (!used.has(i)) return i;
+    }
+    return this.nextColorIndex++ % this.totalColors;
+  }
+
+  addPlayer(socketId, playerName, preferredColorIndex) {
     const spawn = this._getSpawnPosition();
-    const colorIndex = this.nextColorIndex++ % 6;
+    const colorIndex = this._getAvailableColor(preferredColorIndex);
     const player = new Player(socketId, playerName, spawn.x, spawn.y, this.cols, this.rows, colorIndex);
     this.players.set(socketId, player);
-    console.log(`Player ${playerName} joined. Total: ${this.players.size}`);
+    console.log(`Player ${playerName} joined with color ${colorIndex}. Total: ${this.players.size}`);
     return player;
   }
 
@@ -57,6 +83,10 @@ class Game {
   }
 
   updateGame() {
+    const now = Date.now();
+    if (now - this.lastMoveTime < this.moveInterval) return;
+    this.lastMoveTime = now;
+
     const alive = Array.from(this.players.values()).filter(p => !p.dead);
 
     // Move all alive players
@@ -73,9 +103,8 @@ class Game {
     const ny = player.y + player.dir.y;
     const nk = `${nx},${ny}`;
 
-    // Wall death
+    // Wall boundary — stop movement, don't kill
     if (nx < 0 || nx >= this.cols || ny < 0 || ny >= this.rows) {
-      this._killPlayer(player);
       return;
     }
 
@@ -166,6 +195,7 @@ class Game {
   _floodFillEnclosed(ownedSet) {
     const outside = new Set();
     const queue = [];
+    let head = 0;
 
     const key = (x, y) => `${x},${y}`;
     const addIfValid = (x, y) => {
@@ -186,8 +216,8 @@ class Game {
       addIfValid(this.cols - 1, y);
     }
 
-    while (queue.length) {
-      const { x, y } = queue.shift();
+    while (head < queue.length) {
+      const { x, y } = queue[head++];
       addIfValid(x + 1, y);
       addIfValid(x - 1, y);
       addIfValid(x, y + 1);

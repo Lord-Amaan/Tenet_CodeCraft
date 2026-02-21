@@ -16,7 +16,7 @@ const io = new Server(httpServer, {
 });
 
 const PORT = process.env.PORT || 3000;
-const GAME_TICK = 120; // Movement tick ~8 FPS (like Paper.io)
+const GAME_TICK = 16; // ~60 FPS
 
 // Initialize room manager
 const roomManager = new RoomManager();
