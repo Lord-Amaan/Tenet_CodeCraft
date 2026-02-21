@@ -1,171 +1,133 @@
 /* ══════════════════════════════════════════════════════════════════════════ */
-/* ── Leaderboard — Animated Premium ───────────────────────────────────── */
+/* ── Leaderboard — Transparent Left Overlay ───────────────────────────── */
 /* ══════════════════════════════════════════════════════════════════════════ */
 
-.lb {
-  background: rgba(20,16,4,0.85);
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(200,170,60,0.15);
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+.lb-overlay {
+  position: absolute;
+  top: 80px;
+  left: 14px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
   font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  overflow: hidden;
-  animation: fadeSlideIn 0.6s ease-out;
-  transition: border-color 0.3s;
-}
-.lb:hover {
-  border-color: rgba(200,170,60,0.3);
 }
 
-/* ── Toggle button ──────────────────────────────────────────────────────── */
-.lb-toggle {
+/* ── Entry row ──────────────────────────────────────────────────────────── */
+.lb-entry {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 12px 16px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  color: rgba(240,208,72,0.7);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  transition: all 0.2s;
-}
-.lb-toggle:hover {
-  background: rgba(255,255,255,0.03);
-  color: #f0d048;
-}
-.lb-closed .lb-toggle {
-  border-bottom: none;
-}
-
-.lb-toggle-icon {
-  font-size: 12px;
-  transition: transform 0.2s;
-}
-.lb-toggle-text {
-  flex: 1;
-  text-align: left;
-}
-.lb-count {
-  background: rgba(240,208,72,0.15);
-  color: #f0d048;
-  font-size: 9px;
-  padding: 2px 8px;
+  padding: 7px 14px 7px 10px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border-radius: 10px;
-  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: auto;
+  animation: lbSlideIn 0.4s ease-out backwards;
+  transition: background 0.25s, transform 0.2s;
+  min-width: 180px;
 }
 
-/* ── Body ───────────────────────────────────────────────────────────────── */
-.lb-body {
-  padding: 8px 12px 12px;
-  max-height: 300px;
-  overflow-y: auto;
-  animation: fadeIn 0.3s ease-out;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+.lb-entry:hover {
+  background: rgba(0, 0, 0, 0.5);
+  transform: translateX(4px);
 }
 
-.lb-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.lb-entry-first {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.1);
+  padding: 9px 16px 9px 12px;
 }
 
-/* ── Row ────────────────────────────────────────────────────────────────── */
-.lb-row {
-  display: flex;
+@keyframes lbSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ── Rank badge ─────────────────────────────────────────────────────────── */
+.lb-entry-rank {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  transition: all 0.2s;
-  background: rgba(255,255,255,0.02);
-}
-.lb-row:hover {
-  background: rgba(255,255,255,0.05);
-}
-.lb-first {
-  background: rgba(240,208,72,0.08) !important;
-  border: 1px solid rgba(240,208,72,0.12);
-}
-.lb-top3 {
-  animation: rowSlide 0.4s ease-out backwards;
-}
-.lb-row:nth-child(1) { animation-delay: 0s; }
-.lb-row:nth-child(2) { animation-delay: 0.05s; }
-.lb-row:nth-child(3) { animation-delay: 0.1s; }
-@keyframes rowSlide {
-  from { opacity: 0; transform: translateX(-10px); }
-  to { opacity: 1; transform: translateX(0); }
+  justify-content: center;
+  min-width: 30px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #fff;
+  background: var(--entry-color, rgba(255,255,255,0.15));
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--entry-color) 40%, transparent);
 }
 
-.lb-rank {
-  min-width: 28px;
-  text-align: center;
-  font-size: 14px;
-  color: rgba(255,255,255,0.4);
-  font-weight: 700;
-}
-.lb-first .lb-rank {
-  font-size: 16px;
+/* ── Emoji ──────────────────────────────────────────────────────────────── */
+.lb-entry-emoji {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
-.lb-name {
+.lb-entry-first .lb-entry-emoji {
+  font-size: 22px;
+}
+
+/* ── Player name ────────────────────────────────────────────────────────── */
+.lb-entry-name {
   flex: 1;
   font-size: 13px;
-  color: rgba(255,255,255,0.75);
-  font-weight: 600;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.lb-first .lb-name {
-  color: #f0d048;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 
-.lb-kd {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.lb-k {
-  color: #60e880;
-}
-.lb-sep {
-  color: rgba(255,255,255,0.2);
-}
-.lb-d {
-  color: #ff6060;
+.lb-entry-first .lb-entry-name {
+  font-size: 14px;
+  color: #fff;
 }
 
-.lb-empty {
-  text-align: center;
-  color: rgba(255,255,255,0.25);
-  font-size: 12px;
-  padding: 16px;
-  font-style: italic;
+/* ── Territory percentage ───────────────────────────────────────────────── */
+.lb-entry-pct {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 
-/* ── Scrollbar ──────────────────────────────────────────────────────────── */
-.lb-body::-webkit-scrollbar {
-  width: 4px;
+.lb-entry-first .lb-entry-pct {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
 }
-.lb-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-.lb-body::-webkit-scrollbar-thumb {
-  background: rgba(240,208,72,0.2);
-  border-radius: 2px;
-}
-.lb-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(240,208,72,0.35);
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .lb-overlay {
+    top: 60px;
+    left: 8px;
+  }
+  .lb-entry {
+    min-width: 140px;
+    padding: 5px 10px 5px 8px;
+    gap: 6px;
+  }
+  .lb-entry-name {
+    font-size: 11px;
+  }
+  .lb-entry-pct {
+    font-size: 11px;
+  }
 }

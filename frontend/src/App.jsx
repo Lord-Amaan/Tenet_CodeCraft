@@ -52,6 +52,7 @@ function App() {
               onLeaveRoom={handleLeaveRoom}
               onStatsUpdate={handleStatsUpdate}
             />
+            <Leaderboard />
           </div>
           <div className="game-sidebar">
             <HUD
@@ -63,7 +64,6 @@ function App() {
               roomCode={roomCode}
               onLeaveRoom={handleLeaveRoom}
             />
-            <Leaderboard />
           </div>
         </div>
       )}

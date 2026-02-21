@@ -234,7 +234,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
       ctx.fillStyle = '#555';
       ctx.font = 'bold 28px "Segoe UI", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('LAND.IO', cw / 2, ch / 2 - 16);
+      ctx.fillText('Game Of Lands', cw / 2, ch / 2 - 16);
       ctx.fillStyle = '#999';
       ctx.font = '15px "Segoe UI", sans-serif';
       ctx.fillText('Connecting' + dots, cw / 2, ch / 2 + 16);
@@ -675,7 +675,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
       <div className="gc-hud" style={{ width: vpW }}>
         <div className="gc-hud-left">
           <div className="gc-logo-wrap">
-            <span className="gc-logo">LAND<span className="gc-logo-dot">.</span>IO</span>
+            <span className="gc-logo">GameOfLands</span>
           </div>
         </div>
         <div className="gc-hud-center">

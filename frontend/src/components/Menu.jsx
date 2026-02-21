@@ -94,7 +94,7 @@ export function Menu({ onJoinRoom }) {
         {/* Title */}
         <div className="menu-title">
           <span className="title-icon">🍄</span>
-          <h1>LAND<span className="title-dot">.</span>IO</h1>
+          <h1>GameOfLands</h1>
           <p className="subtitle">TERRITORY WARS</p>
         </div>
 

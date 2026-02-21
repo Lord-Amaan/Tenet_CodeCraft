@@ -2,11 +2,19 @@ import { useState, useEffect } from 'react';
 import { socketService } from '../services/socket';
 import '../styles/Leaderboard.css';
 
-const MEDALS = ['🥇', '🥈', '🥉'];
+const ELEMENT_META = [
+  { name: 'LAVA',    emoji: '🔥', color: '#ff4444' },
+  { name: 'OCEAN',   emoji: '🌊', color: '#4488ff' },
+  { name: 'FUNGI',   emoji: '🍄', color: '#44dd66' },
+  { name: 'EARTH',   emoji: '🌍', color: '#ffaa33' },
+  { name: 'CRYSTAL', emoji: '💎', color: '#bb55ff' },
+  { name: 'FROST',   emoji: '❄️',  color: '#44dddd' },
+];
+
+const RANK_LABELS = ['1st', '2nd', '3rd'];
 
 export function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState([]);
-  const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
     const updateLeaderboard = () => {
@@ -19,35 +27,25 @@ export function Leaderboard() {
     return () => clearInterval(interval);
   }, []);
 
-  return (
-    <div className={`lb ${expanded ? 'lb-open' : 'lb-closed'}`}>
-      <button className="lb-toggle" onClick={() => setExpanded(!expanded)}>
-        <span className="lb-toggle-icon">{expanded ? '▾' : '▸'}</span>
-        <span className="lb-toggle-text">LEADERBOARD</span>
-        <span className="lb-count">{leaderboard.length}</span>
-      </button>
+  if (leaderboard.length === 0) return null;
 
-      {expanded && (
-        <div className="lb-body">
-          {leaderboard.length > 0 ? (
-            <div className="lb-list">
-              {leaderboard.map((entry, i) => (
-                <div key={entry.name} className={`lb-row ${i === 0 ? 'lb-first' : ''} ${i < 3 ? 'lb-top3' : ''}`}>
-                  <span className="lb-rank">{i < 3 ? MEDALS[i] : `#${i + 1}`}</span>
-                  <span className="lb-name">{entry.name}</span>
-                  <div className="lb-kd">
-                    <span className="lb-k">{entry.kills}</span>
-                    <span className="lb-sep">/</span>
-                    <span className="lb-d">{entry.deaths}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="lb-empty">No players yet</p>
-          )}
-        </div>
-      )}
+  return (
+    <div className="lb-overlay">
+      {leaderboard.map((entry, i) => {
+        const meta = ELEMENT_META[entry.colorIndex] || ELEMENT_META[0];
+        return (
+          <div
+            key={entry.name}
+            className={`lb-entry ${i === 0 ? 'lb-entry-first' : ''}`}
+            style={{ '--entry-color': meta.color, animationDelay: `${i * 0.06}s` }}
+          >
+            <span className="lb-entry-rank">{i < 3 ? RANK_LABELS[i] : `${i + 1}th`}</span>
+            <span className="lb-entry-emoji">{meta.emoji}</span>
+            <span className="lb-entry-name">{entry.name}</span>
+            <span className="lb-entry-pct">{entry.territory}%</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

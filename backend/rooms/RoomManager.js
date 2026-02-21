@@ -125,14 +125,18 @@ class RoomManager {
     const room = this.rooms.get(roomCode);
     if (!room) return [];
 
+    const totalTiles = room.game.cols * room.game.rows;
+
     return Array.from(room.players.values())
       .map(p => ({
         name: p.name,
         kills: p.kills,
         deaths: p.deaths,
         score: p.score,
+        colorIndex: p.colorIndex,
+        territory: totalTiles > 0 ? Math.round((p.owned.size / totalTiles) * 100) : 0,
       }))
-      .sort((a, b) => b.kills - a.kills)
+      .sort((a, b) => b.score - a.score)
       .slice(0, limit);
   }
 }
