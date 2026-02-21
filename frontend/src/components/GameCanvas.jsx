@@ -1560,21 +1560,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
       </div>
 
       {/* ── Bottom bar ──────────────────────────────────────────────────── */}
-      <div className="gc-footer">
-        <div className="gc-room-tag">
-          <span className="gc-room-code">{roomCode}</span>
-          <span className="gc-room-players">{gameState?.players?.length || 0} online</span>
-        </div>
-        <div className="gc-controls-grid">
-          <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
-          <span className="gc-controls-sep">or</span>
-          <kbd>&uarr;</kbd><kbd>&larr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd>
-        </div>
-        <span className="gc-hint">Capture territory by enclosing areas &middot; Avoid crossing your own trail</span>
-        <button onClick={onLeaveRoom} className="gc-leave-btn">
-          <span>EXIT</span>
-        </button>
-      </div>
+     
     </div>
   );
 }

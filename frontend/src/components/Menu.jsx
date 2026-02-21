@@ -399,12 +399,7 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
       <div style={{position:"fixed",top:18,right:22,zIndex:5,opacity:0.55,fontSize:22,
         animation:"runeRotate 20s linear infinite reverse",color:"#d4b450",
         filter:"drop-shadow(0 0 10px #d4b450)"}}>🛡</div>
-      <div style={{
-        position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",zIndex:5,
-        fontSize:9,letterSpacing:5,color:"rgba(212,180,80,0.55)",
-        fontFamily:"'Rajdhani',sans-serif",textTransform:"uppercase",
-        textShadow:"0 0 10px rgba(212,180,80,0.3)",whiteSpace:"nowrap",
-      }}>SEASON I · OPEN BETA</div>
+
     </>
   );
 
@@ -613,11 +608,11 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
 
           {/* ═══ HERO ═══ */}
           <div className="gol-hero" style={{textAlign:"center",marginBottom:10}}>
-            <div className="gol-hero-crown" style={{
+            {/* <div className="gol-hero-crown" style={{
               fontSize:28,marginBottom:4,lineHeight:1,
               animation:"crownFloat 4s ease-in-out infinite",
               filter:"drop-shadow(0 0 24px rgba(212,180,80,1)) drop-shadow(0 0 48px rgba(200,100,10,0.6))",
-            }}>👑</div>
+            }}>👑</div> */}
 
             <div className="gol-hero-tagline" style={{
               fontSize:8,letterSpacing:4,textTransform:"uppercase",
