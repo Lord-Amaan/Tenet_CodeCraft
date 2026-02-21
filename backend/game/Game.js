@@ -117,10 +117,20 @@ class Game {
     if (player.owned.has(nk)) {
       // Returned to owned territory
       if (player.trail.size > 0) {
-        // Add trail to owned
+        // Include current position in the trail to close the path
+        const currentKey = `${player.x},${player.y}`;
+        if (!player.owned.has(currentKey)) {
+          player.trail.add(currentKey);
+        }
+
+        // Add all trail tiles to owned first
         player.trail.forEach(k => player.owned.add(k));
 
-        // Flood fill enclosed areas
+        // Also add the destination tile (the owned tile we're stepping onto)
+        // to make sure the boundary is fully closed
+        player.owned.add(nk);
+
+        // Flood fill enclosed areas using the updated owned set
         const enclosed = this._floodFillEnclosed(player.owned);
         enclosed.forEach(k => {
           // Steal territory from other players
@@ -141,7 +151,14 @@ class Game {
       player.score = player.owned.size;
     } else {
       // Moving through neutral/enemy territory — add current pos to trail
-      player.trail.add(`${player.x},${player.y}`);
+      const currentKey = `${player.x},${player.y}`;
+      if (!player.owned.has(currentKey)) {
+        // Only add to trail if we're already outside owned territory
+        player.trail.add(currentKey);
+      } else if (player.trail.size === 0) {
+        // First step out of owned territory — mark it as trail start
+        player.trail.add(currentKey);
+      }
       player.x = nx;
       player.y = ny;
     }

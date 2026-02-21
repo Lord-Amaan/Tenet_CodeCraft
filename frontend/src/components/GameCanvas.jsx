@@ -3,23 +3,69 @@ import { socketService } from '../services/socket';
 import '../styles/GameCanvas.css';
 
 const TILE = 32;
+const LERP_SPEED = 0.1;
+const POS_LERP = 0.22;
+const TWO_PI = Math.PI * 2;
 
-// ── Player color palettes ────────────────────────────────────────────────────
+// ── Rich color palettes ──────────────────────────────────────────────────────
 const PLAYER_COLORS = [
-  { owned: 'rgba(204,34,0,0.55)', trail: 'rgba(255,50,20,0.45)', trailLine: '#ff4422', head: '#ff5533', headDark: '#cc1100', headBorder: '#ff9977', barFrom: '#cc2200', barTo: '#ff4422' },
-  { owned: 'rgba(0,68,204,0.55)', trail: 'rgba(34,102,255,0.45)', trailLine: '#2266ff', head: '#5577ff', headDark: '#0011cc', headBorder: '#7799ff', barFrom: '#0044cc', barTo: '#2266ff' },
-  { owned: 'rgba(0,170,68,0.55)', trail: 'rgba(34,221,102,0.45)', trailLine: '#22dd66', head: '#55ff77', headDark: '#00cc11', headBorder: '#77ff99', barFrom: '#00aa44', barTo: '#22dd66' },
-  { owned: 'rgba(204,136,0,0.55)', trail: 'rgba(255,170,34,0.45)', trailLine: '#ffaa22', head: '#ffaa55', headDark: '#cc8800', headBorder: '#ffcc77', barFrom: '#cc8800', barTo: '#ffaa22' },
-  { owned: 'rgba(136,0,204,0.55)', trail: 'rgba(170,34,255,0.45)', trailLine: '#aa22ff', head: '#bb55ff', headDark: '#8800cc', headBorder: '#cc77ff', barFrom: '#8800cc', barTo: '#aa22ff' },
-  { owned: 'rgba(0,170,170,0.55)', trail: 'rgba(34,221,221,0.45)', trailLine: '#22dddd', head: '#55ffff', headDark: '#00cccc', headBorder: '#77ffff', barFrom: '#00aaaa', barTo: '#22dddd' },
+  { owned: '#e84040', ownedLight: '#ff7070', ownedEdge: '#b01818', trail: '#ff6060', trailGlow: 'rgba(255,96,96,0.6)', head: '#ff4444', headGrad: '#cc1111', ring: '#ff9999', bar: 'linear-gradient(90deg,#e84040,#ff6060)', particle: '#ff8888' },
+  { owned: '#4080e8', ownedLight: '#70a8ff', ownedEdge: '#1848b0', trail: '#60a0ff', trailGlow: 'rgba(96,160,255,0.6)', head: '#4488ff', headGrad: '#1155cc', ring: '#99bbff', bar: 'linear-gradient(90deg,#4080e8,#60a0ff)', particle: '#88bbff' },
+  { owned: '#40c860', ownedLight: '#70f090', ownedEdge: '#189028', trail: '#60e880', trailGlow: 'rgba(96,232,128,0.6)', head: '#44dd66', headGrad: '#11aa33', ring: '#88ff99', bar: 'linear-gradient(90deg,#40c860,#60e880)', particle: '#88ff99' },
+  { owned: '#e8a030', ownedLight: '#ffc860', ownedEdge: '#b07010', trail: '#ffc050', trailGlow: 'rgba(255,192,80,0.6)', head: '#ffaa33', headGrad: '#cc7700', ring: '#ffcc77', bar: 'linear-gradient(90deg,#e8a030,#ffc050)', particle: '#ffcc77' },
+  { owned: '#a050e0', ownedLight: '#c880ff', ownedEdge: '#7020b0', trail: '#c070ff', trailGlow: 'rgba(192,112,255,0.6)', head: '#bb55ff', headGrad: '#8822cc', ring: '#dd99ff', bar: 'linear-gradient(90deg,#a050e0,#c070ff)', particle: '#dd99ff' },
+  { owned: '#40c8c8', ownedLight: '#70f0f0', ownedEdge: '#109090', trail: '#60e8e8', trailGlow: 'rgba(96,232,232,0.6)', head: '#44dddd', headGrad: '#11aaaa', ring: '#88ffff', bar: 'linear-gradient(90deg,#40c8c8,#60e8e8)', particle: '#88ffff' },
 ];
 
-// ── Neutral tile colors ──────────────────────────────────────────────────────
-const NEUTRAL_BG = ['#e8c832', '#d4b820', '#f0d048', '#c8aa18', '#e0c030'];
+const GROUND_A = '#eee8cc';
+const GROUND_B = '#e6deba';
 
-function seededRng(seed, n) {
-  let x = Math.sin(seed * 9301 + n * 49297 + 233720) * 43758.5453;
-  return x - Math.floor(x);
+function lerp(a, b, t) { return a + (b - a) * t; }
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+// ── Particle system ──────────────────────────────────────────────────────────
+class ParticlePool {
+  constructor(max = 300) {
+    this.particles = [];
+    this.max = max;
+  }
+  emit(x, y, color, count = 6, speed = 2) {
+    for (let i = 0; i < count; i++) {
+      if (this.particles.length >= this.max) this.particles.shift();
+      const angle = Math.random() * TWO_PI;
+      const vel = 0.5 + Math.random() * speed;
+      this.particles.push({
+        x, y,
+        vx: Math.cos(angle) * vel,
+        vy: Math.sin(angle) * vel,
+        life: 1,
+        decay: 0.015 + Math.random() * 0.025,
+        size: 2 + Math.random() * 3,
+        color,
+      });
+    }
+  }
+  update() {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.96;
+      p.vy *= 0.96;
+      p.life -= p.decay;
+      if (p.life <= 0) this.particles.splice(i, 1);
+    }
+  }
+  draw(ctx, camX, camY) {
+    for (const p of this.particles) {
+      ctx.globalAlpha = p.life * 0.7;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x - camX, p.y - camY, p.size * p.life, 0, TWO_PI);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -35,6 +81,21 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   const onStatsUpdateRef = useRef(onStatsUpdate);
   const gameStateRef = useRef(null);
   const animFrameRef = useRef(null);
+  const frameCountRef = useRef(0);
+
+  // Smooth camera
+  const camRef = useRef({ x: -1, y: -1, initialized: false });
+  // Player position interpolation
+  const playerPosRef = useRef(new Map());
+  // Particle systems
+  const trailParticles = useRef(new ParticlePool(200));
+  const captureParticles = useRef(new ParticlePool(300));
+  // Previous trail sizes for detecting new trail tiles
+  const prevTrailSizeRef = useRef(new Map());
+  // Death animation
+  const deathAnimRef = useRef({ active: false, progress: 0 });
+  // Previous owned sizes for detecting capture
+  const prevOwnedRef = useRef(new Map());
 
   useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
   useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
@@ -45,7 +106,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
     const measure = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        setViewportSize({ w: rect.width, h: rect.height - 100 }); // leave room for HUD
+        setViewportSize({ w: rect.width, h: rect.height - 90 });
       }
     };
     measure();
@@ -53,7 +114,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
     return () => window.removeEventListener('resize', measure);
   }, []);
 
-  // ── Keyboard → send direction to server ──────────────────────────────────
+  // ── Keyboard ───────────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (document.activeElement.tagName === 'INPUT') return;
@@ -76,15 +137,55 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   useEffect(() => {
     const handleGameUpdate = (data) => {
       if (data && data.roomCode === roomCodeRef.current) {
-        gameStateRef.current = data.gameState;
-        setGameState(data.gameState);
-        const local = data.gameState.players.find(p => p.id === playerIdRef.current);
+        const gs = data.gameState;
+        gameStateRef.current = gs;
+        setGameState(gs);
+
+        if (gs.players) {
+          const posMap = playerPosRef.current;
+          for (const p of gs.players) {
+            const existing = posMap.get(p.id);
+            if (existing) {
+              existing.targetX = p.x;
+              existing.targetY = p.y;
+            } else {
+              posMap.set(p.id, { x: p.x, y: p.y, targetX: p.x, targetY: p.y });
+            }
+
+            // Detect new trail tiles -> emit particles
+            const prevSize = prevTrailSizeRef.current.get(p.id) || 0;
+            if (p.trail && p.trail.length > prevSize && p.trail.length > 0) {
+              const lastKey = p.trail[p.trail.length - 1];
+              const [tx, ty] = lastKey.split(',').map(Number);
+              const pc = PLAYER_COLORS[p.colorIndex] || PLAYER_COLORS[0];
+              trailParticles.current.emit(tx * TILE + TILE / 2, ty * TILE + TILE / 2, pc.particle, 4, 1.5);
+            }
+            prevTrailSizeRef.current.set(p.id, p.trail ? p.trail.length : 0);
+
+            // Detect capture (owned size jumped) -> burst particles
+            const prevOwned = prevOwnedRef.current.get(p.id) || 0;
+            if (p.owned && p.owned.length > prevOwned + 5) {
+              const pc = PLAYER_COLORS[p.colorIndex] || PLAYER_COLORS[0];
+              captureParticles.current.emit(p.x * TILE + TILE / 2, p.y * TILE + TILE / 2, pc.particle, 20, 4);
+            }
+            prevOwnedRef.current.set(p.id, p.owned ? p.owned.length : 0);
+          }
+          const activeIds = new Set(gs.players.map(p => p.id));
+          for (const id of posMap.keys()) if (!activeIds.has(id)) posMap.delete(id);
+        }
+
+        const local = gs.players?.find(p => p.id === playerIdRef.current);
         if (local) {
           if (local.score > prevScoreRef.current && prevScoreRef.current > 0) {
             setFlashCapture(true);
-            setTimeout(() => setFlashCapture(false), 300);
+            setTimeout(() => setFlashCapture(false), 400);
           }
           prevScoreRef.current = local.score;
+          if (local.dead && !deathAnimRef.current.active) {
+            deathAnimRef.current = { active: true, progress: 0 };
+          } else if (!local.dead) {
+            deathAnimRef.current.active = false;
+          }
           if (onStatsUpdateRef.current) {
             onStatsUpdateRef.current({
               kills: local.kills,
@@ -112,218 +213,437 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
     };
   }, []);
 
-  // ── Canvas render loop (60 FPS) ──────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── RENDER LOOP ──────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const gs = gameStateRef.current;
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const frame = frameCountRef.current++;
+    const time = performance.now() / 1000;
+
+    // ── Loading screen ───────────────────────────────────────────────────
     if (!gs) {
-      ctx.fillStyle = '#0e0a00';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#f0d048';
-      ctx.font = 'bold 22px "Courier New", monospace';
+      ctx.fillStyle = '#f5ecd0';
+      ctx.fillRect(0, 0, cw, ch);
+      const dots = '.'.repeat(1 + (Math.floor(time * 2) % 3));
+      ctx.fillStyle = '#555';
+      ctx.font = 'bold 28px "Segoe UI", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('🍄 LAND.IO', canvas.width / 2, canvas.height / 2 - 10);
-      ctx.fillStyle = '#aa8833';
-      ctx.font = '14px "Courier New", monospace';
-      ctx.fillText('Waiting for game data...', canvas.width / 2, canvas.height / 2 + 20);
+      ctx.fillText('LAND.IO', cw / 2, ch / 2 - 16);
+      ctx.fillStyle = '#999';
+      ctx.font = '15px "Segoe UI", sans-serif';
+      ctx.fillText('Connecting' + dots, cw / 2, ch / 2 + 16);
+      ctx.strokeStyle = '#ccc';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cw / 2, ch / 2 + 50, 12, time * 3, time * 3 + Math.PI * 1.5);
+      ctx.stroke();
       animFrameRef.current = requestAnimationFrame(renderCanvas);
       return;
     }
 
     const gridCols = gs.cols || 90;
     const gridRows = gs.rows || 60;
-    const cw = canvas.width;
-    const ch = canvas.height;
-
-    // Find local player
-    const localPlayer = gs.players?.find(p => p.id === playerIdRef.current);
-
-    // Camera: center on player
-    let camX = 0, camY = 0;
-    if (localPlayer) {
-      camX = localPlayer.x * TILE + TILE / 2 - cw / 2;
-      camY = localPlayer.y * TILE + TILE / 2 - ch / 2;
-    }
-    // Clamp camera to map bounds
     const mapW = gridCols * TILE;
     const mapH = gridRows * TILE;
-    camX = Math.max(0, Math.min(camX, mapW - cw));
-    camY = Math.max(0, Math.min(camY, mapH - ch));
 
-    // Visible tile range
-    const startCol = Math.max(0, Math.floor(camX / TILE));
-    const endCol = Math.min(gridCols - 1, Math.floor((camX + cw) / TILE));
-    const startRow = Math.max(0, Math.floor(camY / TILE));
-    const endRow = Math.min(gridRows - 1, Math.floor((camY + ch) / TILE));
+    // ── Update particles ─────────────────────────────────────────────────
+    trailParticles.current.update();
+    captureParticles.current.update();
 
-    // Build lookup maps
+    // ── Interpolate player positions ─────────────────────────────────────
+    const posMap = playerPosRef.current;
+    for (const [, pos] of posMap) {
+      pos.x = lerp(pos.x, pos.targetX, POS_LERP);
+      pos.y = lerp(pos.y, pos.targetY, POS_LERP);
+    }
+
+    const localPlayer = gs.players?.find(p => p.id === playerIdRef.current);
+    const localPos = posMap.get(playerIdRef.current);
+
+    // ── Lerp camera with lookahead ───────────────────────────────────────
+    let targetCamX = 0, targetCamY = 0;
+    if (localPos) {
+      const dir = localPlayer?.dir || { x: 0, y: 0 };
+      const lookahead = TILE * 2.5;
+      targetCamX = localPos.x * TILE + TILE / 2 - cw / 2 + dir.x * lookahead;
+      targetCamY = localPos.y * TILE + TILE / 2 - ch / 2 + dir.y * lookahead;
+    }
+    targetCamX = Math.max(0, Math.min(targetCamX, mapW - cw));
+    targetCamY = Math.max(0, Math.min(targetCamY, mapH - ch));
+
+    const cam = camRef.current;
+    if (!cam.initialized) {
+      cam.x = targetCamX;
+      cam.y = targetCamY;
+      cam.initialized = true;
+    } else {
+      cam.x = lerp(cam.x, targetCamX, LERP_SPEED);
+      cam.y = lerp(cam.y, targetCamY, LERP_SPEED);
+    }
+    const camX = cam.x;
+    const camY = cam.y;
+
+    // ── Visible tile range ───────────────────────────────────────────────
+    const startCol = Math.max(0, Math.floor(camX / TILE) - 1);
+    const endCol = Math.min(gridCols - 1, Math.ceil((camX + cw) / TILE));
+    const startRow = Math.max(0, Math.floor(camY / TILE) - 1);
+    const endRow = Math.min(gridRows - 1, Math.ceil((camY + ch) / TILE));
+
+    // ── Build lookup maps ────────────────────────────────────────────────
     const ownerMap = {};
     const trailMap = {};
-    const headMap = {};
     if (gs.players) {
       for (const p of gs.players) {
         if (p.owned) for (const k of p.owned) ownerMap[k] = p.colorIndex;
         if (p.trail) for (const k of p.trail) trailMap[k] = p.colorIndex;
-        if (!p.dead) headMap[`${p.x},${p.y}`] = p;
       }
     }
 
-    // Clear
-    ctx.fillStyle = '#0e0a00';
+    // ══════════════════════════════════════════════════════════════════════
+    // ── DRAW GROUND ──────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    ctx.fillStyle = '#d4c898';
     ctx.fillRect(0, 0, cw, ch);
 
-    // Draw visible tiles
     for (let row = startRow; row <= endRow; row++) {
       for (let col = startCol; col <= endCol; col++) {
         const px = col * TILE - camX;
         const py = row * TILE - camY;
         const k = `${col},${row}`;
 
-        // Neutral tile
-        const seed = col * 100 + row;
-        const ci = (col + row * 3 + Math.floor(seed * 0.37)) % NEUTRAL_BG.length;
-        const brightness = 0.88 + ((seed * 17) % 23) / 100;
-        ctx.fillStyle = NEUTRAL_BG[ci];
-        ctx.globalAlpha = brightness;
+        ctx.fillStyle = (col + row) % 2 === 0 ? GROUND_A : GROUND_B;
         ctx.fillRect(px, py, TILE, TILE);
-        ctx.globalAlpha = 1;
 
-        // Grid lines
-        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(px, py, TILE, TILE);
-
-        // Owned overlay
-        const ownerCI = ownerMap[k];
-        if (ownerCI !== undefined) {
-          ctx.fillStyle = PLAYER_COLORS[ownerCI].owned;
+        // ── Owned territory ────────────────────────────────────────────
+        const oci = ownerMap[k];
+        if (oci !== undefined) {
+          const pc = PLAYER_COLORS[oci];
+          ctx.fillStyle = pc.owned;
+          ctx.globalAlpha = 0.5;
           ctx.fillRect(px, py, TILE, TILE);
+
+          ctx.fillStyle = pc.ownedLight;
+          ctx.globalAlpha = 0.12;
+          ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+          ctx.globalAlpha = 1;
+
+          const hasTop = ownerMap[`${col},${row - 1}`] === oci;
+          const hasBot = ownerMap[`${col},${row + 1}`] === oci;
+          const hasLeft = ownerMap[`${col - 1},${row}`] === oci;
+          const hasRight = ownerMap[`${col + 1},${row}`] === oci;
+
+          ctx.fillStyle = pc.ownedEdge;
+          ctx.globalAlpha = 0.5;
+          const bw = 3;
+          if (!hasTop) ctx.fillRect(px, py, TILE, bw);
+          if (!hasBot) ctx.fillRect(px, py + TILE - bw, TILE, bw);
+          if (!hasLeft) ctx.fillRect(px, py, bw, TILE);
+          if (!hasRight) ctx.fillRect(px + TILE - bw, py, bw, TILE);
+          ctx.globalAlpha = 1;
+
+          if (!hasTop && !hasLeft) {
+            ctx.fillStyle = pc.ownedLight;
+            ctx.globalAlpha = 0.15;
+            ctx.fillRect(px, py, 6, 6);
+            ctx.globalAlpha = 1;
+          }
         }
 
-        // Trail overlay
-        const trailCI = trailMap[k];
-        if (trailCI !== undefined && ownerCI === undefined) {
-          ctx.fillStyle = PLAYER_COLORS[trailCI].trail;
-          ctx.fillRect(px, py, TILE, TILE);
-          // Cross pattern
-          ctx.strokeStyle = PLAYER_COLORS[trailCI].trailLine;
-          ctx.lineWidth = 2;
-          ctx.globalAlpha = 0.6;
+        // ── Trail tiles ────────────────────────────────────────────────
+        const tci = trailMap[k];
+        if (tci !== undefined && oci === undefined) {
+          const tc = PLAYER_COLORS[tci];
+          const pulse = 0.35 + Math.sin(time * 4 + col * 0.5 + row * 0.7) * 0.12;
+          ctx.fillStyle = tc.trail;
+          ctx.globalAlpha = pulse;
+          ctx.fillRect(px + 1, py + 1, TILE - 2, TILE - 2);
+          ctx.globalAlpha = 1;
+
+          const dSize = 4 + Math.sin(time * 5 + col + row) * 1.5;
+          const cx = px + TILE / 2;
+          const cy = py + TILE / 2;
+          ctx.fillStyle = tc.trailGlow;
           ctx.beginPath();
-          ctx.moveTo(px, py + TILE / 2);
-          ctx.lineTo(px + TILE, py + TILE / 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(px + TILE / 2, py);
-          ctx.lineTo(px + TILE / 2, py + TILE);
-          ctx.stroke();
+          ctx.moveTo(cx, cy - dSize);
+          ctx.lineTo(cx + dSize, cy);
+          ctx.lineTo(cx, cy + dSize);
+          ctx.lineTo(cx - dSize, cy);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = tc.trail;
+          ctx.lineWidth = 1.5;
+          ctx.globalAlpha = 0.4;
+          ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
           ctx.globalAlpha = 1;
         }
 
-        // Player head
-        const headPlayer = headMap[k];
-        if (headPlayer) {
-          const hci = headPlayer.colorIndex;
-          const hx = px + 4, hy = py + 4, hw = TILE - 8, hh = TILE - 8;
-          // Glow
-          ctx.shadowColor = PLAYER_COLORS[hci].headBorder;
-          ctx.shadowBlur = 14;
-          // Body
-          ctx.fillStyle = PLAYER_COLORS[hci].head;
+        ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(px, py, TILE, TILE);
+      }
+    }
+
+    // ── Particles behind players ─────────────────────────────────────────
+    trailParticles.current.draw(ctx, camX, camY);
+    captureParticles.current.draw(ctx, camX, camY);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ── MAP BORDER ───────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    const bx = -camX;
+    const by = -camY;
+    ctx.fillStyle = '#b0a878';
+    if (by > 0) ctx.fillRect(0, 0, cw, by);
+    if (by + mapH < ch) ctx.fillRect(0, by + mapH, cw, ch - by - mapH);
+    if (bx > 0) ctx.fillRect(0, 0, bx, ch);
+    if (bx + mapW < cw) ctx.fillRect(bx + mapW, 0, cw - bx - mapW, ch);
+
+    const borderPulse = 0.5 + Math.sin(time * 2) * 0.15;
+    ctx.strokeStyle = `rgba(120,100,60,${borderPulse})`;
+    ctx.lineWidth = 5;
+    ctx.strokeRect(bx, by, mapW, mapH);
+    ctx.strokeStyle = `rgba(180,160,100,${borderPulse * 0.4})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx + 3, by + 3, mapW - 6, mapH - 6);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ── DRAW PLAYER CHARACTERS ───────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    if (gs.players) {
+      const sorted = [...gs.players].sort((a, b) => {
+        if (a.id === playerIdRef.current) return 1;
+        if (b.id === playerIdRef.current) return -1;
+        return 0;
+      });
+
+      for (const p of sorted) {
+        if (p.dead) continue;
+        const pos = posMap.get(p.id);
+        if (!pos) continue;
+
+        const cx = pos.x * TILE + TILE / 2 - camX;
+        const cy = pos.y * TILE + TILE / 2 - camY;
+        const pc = PLAYER_COLORS[p.colorIndex] || PLAYER_COLORS[0];
+        const isLocal = p.id === playerIdRef.current;
+        const r = TILE / 2 - 1;
+
+        // Shadow
+        const shadowPulse = 1 + Math.sin(time * 3) * 0.08;
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + r + 3, r * 0.85 * shadowPulse, 3, 0, 0, TWO_PI);
+        ctx.fill();
+
+        // Glow ring
+        const glowR = r + 4 + Math.sin(time * 3 + p.colorIndex) * 2;
+        const glowGrad = ctx.createRadialGradient(cx, cy, r, cx, cy, glowR + 4);
+        glowGrad.addColorStop(0, pc.ring + '40');
+        glowGrad.addColorStop(1, pc.ring + '00');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, glowR + 4, 0, TWO_PI);
+        ctx.fill();
+
+        // Body gradient
+        const bodyGrad = ctx.createRadialGradient(cx - 3, cy - 4, 2, cx, cy, r);
+        bodyGrad.addColorStop(0, pc.ring);
+        bodyGrad.addColorStop(0.6, pc.head);
+        bodyGrad.addColorStop(1, pc.headGrad);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, TWO_PI);
+        ctx.fillStyle = bodyGrad;
+        ctx.fill();
+
+        ctx.strokeStyle = isLocal ? '#fff' : pc.ring;
+        ctx.lineWidth = isLocal ? 2.5 : 1.8;
+        ctx.stroke();
+
+        // Bob animation
+        const bob = Math.sin(time * 4 + p.colorIndex * 1.2) * 1.5;
+
+        // Eyes
+        const eyeOffsetX = 5;
+        const eyeY = cy - 2 + bob;
+        const eyeR = 4;
+        const pupilR = 2.2;
+        const dirX = p.dir?.x || 0;
+        const dirY = p.dir?.y || 0;
+        const pupilShift = 2;
+
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(cx - eyeOffsetX, eyeY, eyeR, 0, TWO_PI);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + eyeOffsetX, eyeY, eyeR, 0, TWO_PI);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(cx - eyeOffsetX, eyeY, eyeR, 0, TWO_PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx + eyeOffsetX, eyeY, eyeR, 0, TWO_PI);
+        ctx.stroke();
+
+        ctx.fillStyle = '#222';
+        ctx.beginPath();
+        ctx.arc(cx - eyeOffsetX + dirX * pupilShift, eyeY + dirY * pupilShift, pupilR, 0, TWO_PI);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + eyeOffsetX + dirX * pupilShift, eyeY + dirY * pupilShift, pupilR, 0, TWO_PI);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath();
+        ctx.arc(cx - eyeOffsetX + dirX * pupilShift - 0.8, eyeY + dirY * pupilShift - 0.8, 0.9, 0, TWO_PI);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + eyeOffsetX + dirX * pupilShift - 0.8, eyeY + dirY * pupilShift - 0.8, 0.9, 0, TWO_PI);
+        ctx.fill();
+
+        // Smile
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(cx, cy + 3 + bob, 4, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+
+        // Name pill
+        ctx.font = 'bold 11px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        const nameW = ctx.measureText(p.name).width + 12;
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.beginPath();
+        ctx.roundRect(cx - nameW / 2, cy - r - 18, nameW, 16, 8);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(p.name, cx, cy - r - 6);
+
+        // Score badge for local
+        if (isLocal && p.score > 0) {
+          const scoreText = String(p.score);
+          const sw = ctx.measureText(scoreText).width + 10;
+          ctx.fillStyle = pc.head;
+          ctx.globalAlpha = 0.85;
           ctx.beginPath();
-          ctx.roundRect(hx, hy, hw, hh, 6);
+          ctx.roundRect(cx - sw / 2, cy + r + 6, sw, 14, 7);
           ctx.fill();
-          ctx.shadowBlur = 0;
-          // Border
-          ctx.strokeStyle = PLAYER_COLORS[hci].headBorder;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          // Eyes
+          ctx.globalAlpha = 1;
           ctx.fillStyle = '#fff';
-          ctx.beginPath();
-          ctx.arc(px + TILE / 2 - 4, py + TILE / 2 - 2, 3, 0, Math.PI * 2);
-          ctx.arc(px + TILE / 2 + 4, py + TILE / 2 - 2, 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#222';
-          ctx.beginPath();
-          ctx.arc(px + TILE / 2 - 3, py + TILE / 2 - 2, 1.5, 0, Math.PI * 2);
-          ctx.arc(px + TILE / 2 + 5, py + TILE / 2 - 2, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-          // Name
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 7px "Courier New", monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(headPlayer.name, px + TILE / 2, py + TILE / 2 + 9, TILE - 8);
+          ctx.font = 'bold 9px "Segoe UI", sans-serif';
+          ctx.fillText(scoreText, cx, cy + r + 16);
         }
       }
     }
 
-    // ── Map border (red glow lines) ──────────────────────────────────────
-    ctx.strokeStyle = '#ff4422';
-    ctx.lineWidth = 4;
-    ctx.shadowColor = '#ff4422';
-    ctx.shadowBlur = 12;
-    ctx.strokeRect(-camX, -camY, mapW, mapH);
-    ctx.shadowBlur = 0;
-
-    // ── Death overlay ────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // ── DEATH OVERLAY ────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
     if (localPlayer?.dead) {
-      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      const da = deathAnimRef.current;
+      if (da.active) da.progress = Math.min(da.progress + 0.03, 1);
+      const alpha = easeOutCubic(da.progress) * 0.7;
+
+      const vig = ctx.createRadialGradient(cw / 2, ch / 2, cw * 0.15, cw / 2, ch / 2, cw * 0.7);
+      vig.addColorStop(0, `rgba(30,0,0,${alpha * 0.3})`);
+      vig.addColorStop(1, `rgba(0,0,0,${alpha})`);
+      ctx.fillStyle = vig;
       ctx.fillRect(0, 0, cw, ch);
-      ctx.fillStyle = '#ff4422';
-      ctx.font = 'bold 30px "Courier New", monospace';
+
+      for (let i = 0; i < 5; i++) {
+        const gy = Math.random() * ch;
+        ctx.fillStyle = `rgba(255,50,50,${0.08 * da.progress})`;
+        ctx.fillRect(0, gy, cw, 2);
+      }
+
+      const shakeX = (Math.random() - 0.5) * 4 * da.progress;
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold 36px "Segoe UI", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('WIPED OUT', cw / 2, ch / 2 - 10);
-      ctx.fillStyle = '#f0d048';
-      ctx.font = '14px "Courier New", monospace';
-      ctx.fillText('Respawning...', cw / 2, ch / 2 + 20);
+      ctx.fillText('ELIMINATED', cw / 2 + shakeX, ch / 2 - 10);
+      ctx.fillStyle = '#ddd';
+      ctx.font = '15px "Segoe UI", sans-serif';
+      const respawnDots = '.'.repeat(1 + (Math.floor(time * 3) % 3));
+      ctx.fillText('Respawning' + respawnDots, cw / 2, ch / 2 + 24);
     }
 
-    // ── Minimap ──────────────────────────────────────────────────────────
-    const mmW = 140, mmH = Math.round(140 * (gridRows / gridCols));
+    // ══════════════════════════════════════════════════════════════════════
+    // ── MINIMAP ──────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    const mmW = 160, mmH = Math.round(160 * (gridRows / gridCols));
     const mmX = cw - mmW - 12, mmY = ch - mmH - 12;
-    const mmScaleX = mmW / gridCols, mmScaleY = mmH / gridRows;
+    const mmSX = mmW / gridCols, mmSY = mmH / gridRows;
 
-    ctx.fillStyle = 'rgba(14,10,0,0.85)';
-    ctx.fillRect(mmX - 2, mmY - 2, mmW + 4, mmH + 4);
-    ctx.strokeStyle = '#b8960a';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(mmX - 2, mmY - 2, mmW + 4, mmH + 4);
-
-    // Minimap tiles
-    ctx.fillStyle = 'rgba(224,192,48,0.2)';
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.roundRect(mmX - 5, mmY - 5, mmW + 10, mmH + 10, 10);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.roundRect(mmX - 3, mmY - 3, mmW + 6, mmH + 6, 8);
+    ctx.fill();
+    ctx.fillStyle = '#e8e2c4';
     ctx.fillRect(mmX, mmY, mmW, mmH);
 
     if (gs.players) {
       for (const p of gs.players) {
+        const pc = PLAYER_COLORS[p.colorIndex] || PLAYER_COLORS[0];
         if (p.owned) {
-          ctx.fillStyle = PLAYER_COLORS[p.colorIndex]?.owned || 'rgba(255,255,255,0.3)';
+          ctx.fillStyle = pc.owned;
+          ctx.globalAlpha = 0.65;
           for (const k of p.owned) {
             const [ox, oy] = k.split(',').map(Number);
-            ctx.fillRect(mmX + ox * mmScaleX, mmY + oy * mmScaleY, Math.ceil(mmScaleX), Math.ceil(mmScaleY));
+            ctx.fillRect(mmX + ox * mmSX, mmY + oy * mmSY, Math.ceil(mmSX), Math.ceil(mmSY));
           }
+          ctx.globalAlpha = 1;
         }
-        // Player dot on minimap
         if (!p.dead) {
-          ctx.fillStyle = PLAYER_COLORS[p.colorIndex]?.head || '#fff';
-          ctx.beginPath();
-          ctx.arc(mmX + p.x * mmScaleX + mmScaleX / 2, mmY + p.y * mmScaleY + mmScaleY / 2, 3, 0, Math.PI * 2);
-          ctx.fill();
+          const pos = posMap.get(p.id);
+          if (pos) {
+            ctx.fillStyle = pc.head;
+            ctx.beginPath();
+            ctx.arc(mmX + pos.x * mmSX + mmSX / 2, mmY + pos.y * mmSY + mmSY / 2, 3.5, 0, TWO_PI);
+            ctx.fill();
+            if (p.id === playerIdRef.current) {
+              ctx.strokeStyle = '#fff';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              const pingR = 3.5 + (time * 8 % 8);
+              ctx.strokeStyle = `rgba(255,255,255,${Math.max(0, 1 - pingR / 11)})`;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.arc(mmX + pos.x * mmSX + mmSX / 2, mmY + pos.y * mmSY + mmSY / 2, pingR, 0, TWO_PI);
+              ctx.stroke();
+            }
+          }
         }
       }
     }
 
-    // Viewport rectangle on minimap
-    ctx.strokeStyle = '#f0d048';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
     ctx.strokeRect(
-      mmX + (camX / TILE) * mmScaleX,
-      mmY + (camY / TILE) * mmScaleY,
-      (cw / TILE) * mmScaleX,
-      (ch / TILE) * mmScaleY
+      mmX + (camX / TILE) * mmSX,
+      mmY + (camY / TILE) * mmSY,
+      (cw / TILE) * mmSX,
+      (ch / TILE) * mmSY
     );
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.font = 'bold 8px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('MAP', mmX + 4, mmY + 10);
 
     animFrameRef.current = requestAnimationFrame(renderCanvas);
   }, []);
@@ -331,110 +651,78 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   // Start/stop render loop
   useEffect(() => {
     animFrameRef.current = requestAnimationFrame(renderCanvas);
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
+    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
   }, [renderCanvas]);
 
-  // ── Build HUD data from state ────────────────────────────────────────────
+  // ── HUD data ───────────────────────────────────────────────────────────────
   const localPlayer = gameState?.players?.find(p => p.id === playerId);
   const gridCols = gameState?.cols || 90;
   const gridRows = gameState?.rows || 60;
   const score = localPlayer?.score || 0;
-  const pct = Math.round((score / (gridCols * gridRows)) * 100);
+  const totalTiles = gridCols * gridRows;
+  const pct = Math.round((score / totalTiles) * 100);
   const localCI = localPlayer?.colorIndex ?? 0;
-  const colors = PLAYER_COLORS[localCI];
+  const pc = PLAYER_COLORS[localCI];
+  const kills = localPlayer?.kills || 0;
+  const deaths = localPlayer?.deaths || 0;
 
-  const vpW = Math.min(viewportSize.w, 1200);
-  const vpH = Math.min(viewportSize.h, 750);
+  const vpW = Math.min(viewportSize.w, 1400);
+  const vpH = Math.min(viewportSize.h, 800);
 
-  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div ref={containerRef} style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', height: '100%', background: '#0e0a00',
-      fontFamily: "'Courier New', monospace", userSelect: 'none',
-    }}>
-      {/* ── HUD bar ────────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        width: vpW + 6, marginBottom: 8, padding: '6px 14px',
-        background: '#1a1200', border: '2px solid #b8960a', borderRadius: 4, boxSizing: 'border-box',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 34, height: 34, background: '#2a1e00', border: '2px solid #b8960a',
-            borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
-          }}>🍄</div>
-          <span style={{ color: '#f0d048', fontWeight: 'bold', fontSize: 16, letterSpacing: 3 }}>LAND.IO</span>
-        </div>
-        <div style={{ flex: 1, margin: '0 20px' }}>
-          <div style={{ color: '#664400', fontSize: 9, letterSpacing: 2, marginBottom: 3 }}>TERRITORY</div>
-          <div style={{ height: 10, background: '#2a1e00', borderRadius: 5, border: '1px solid #554400', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', width: `${pct}%`,
-              background: `linear-gradient(90deg, ${colors.barFrom}, ${colors.barTo})`,
-              borderRadius: 5, transition: 'width 0.15s ease',
-              boxShadow: flashCapture ? '0 0 10px rgba(255,80,40,0.9)' : 'none',
-            }} />
+    <div ref={containerRef} className="gc-root">
+      {/* ── Top HUD ─────────────────────────────────────────────────────── */}
+      <div className="gc-hud" style={{ width: vpW }}>
+        <div className="gc-hud-left">
+          <div className="gc-logo-wrap">
+            <span className="gc-logo">LAND<span className="gc-logo-dot">.</span>IO</span>
           </div>
-          <div style={{ color: '#f0d048', fontSize: 10, marginTop: 2, letterSpacing: 1 }}>{pct}% ({score} tiles)</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ color: '#554400', fontSize: 9, letterSpacing: 2 }}>TILES</div>
-          <div style={{
-            color: flashCapture ? '#ffaa44' : '#f0d048', fontSize: 20, fontWeight: 'bold',
-            letterSpacing: 2, transition: 'color 0.15s',
-          }}>{String(score).padStart(3, '0')}</div>
+        <div className="gc-hud-center">
+          <div className="gc-bar-track">
+            <div className="gc-bar-fill" style={{ width: `${Math.max(pct, 1)}%`, background: pc.bar }} />
+            <div className="gc-bar-shimmer" />
+          </div>
+          <span className="gc-bar-label">{pct}% territory &mdash; {score} tiles</span>
+        </div>
+        <div className="gc-hud-stats">
+          <div className="gc-stat">
+            <span className="gc-stat-icon">&#x2694;</span>
+            <span className="gc-stat-val">{kills}</span>
+          </div>
+          <div className="gc-stat">
+            <span className="gc-stat-icon">&#x1F480;</span>
+            <span className="gc-stat-val">{deaths}</span>
+          </div>
+        </div>
+        <div className="gc-hud-right">
+          <span className="gc-score" key={score}>{score}</span>
         </div>
       </div>
 
-      {/* ── Canvas viewport ────────────────────────────────────────────── */}
-      <div style={{
-        position: 'relative',
-        border: '3px solid #b8960a', boxShadow: '0 4px 40px rgba(0,0,0,0.7)',
-        borderRadius: 4, overflow: 'hidden',
-      }}>
+      {/* ── Canvas ──────────────────────────────────────────────────────── */}
+      <div className="gc-viewport" style={{ width: vpW, height: vpH }}>
         <canvas
           ref={canvasRef}
           width={vpW}
           height={vpH}
-          style={{ display: 'block', background: '#0e0a00' }}
+          className="gc-canvas"
         />
-
-        {/* Capture flash overlay */}
-        {flashCapture && (
-          <div style={{
-            position: 'absolute', inset: 0, background: 'rgba(255,80,20,0.18)',
-            pointerEvents: 'none', animation: 'captureFlash 0.3s ease-out forwards',
-          }} />
-        )}
+        {flashCapture && <div className="gc-flash" />}
       </div>
 
-      {/* ── Footer ─────────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        width: vpW + 6, marginTop: 8, padding: '6px 14px',
-        background: '#1a1200', border: '2px solid #b8960a', borderRadius: 4, boxSizing: 'border-box',
-      }}>
-        <span style={{ color: '#664400', fontSize: 10, letterSpacing: 2 }}>
-          WASD / ARROWS · CAPTURE TERRITORY · AVOID YOUR TRAIL
-        </span>
-        <button onClick={onLeaveRoom} style={{
-          padding: '6px 16px', background: 'linear-gradient(135deg, #ff4422, #cc2200)',
-          border: '2px solid #ff8866', color: '#fff', borderRadius: 4, cursor: 'pointer',
-          fontFamily: "'Courier New', monospace", fontWeight: 'bold', fontSize: 11, letterSpacing: 2,
-        }}>
-          LEAVE
+      {/* ── Bottom bar ──────────────────────────────────────────────────── */}
+      <div className="gc-footer" style={{ width: vpW }}>
+        <div className="gc-controls-grid">
+          <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+          <span className="gc-controls-sep">or</span>
+          <kbd>&uarr;</kbd><kbd>&larr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd>
+        </div>
+        <span className="gc-hint">Capture territory by enclosing areas &middot; Avoid crossing your own trail</span>
+        <button onClick={onLeaveRoom} className="gc-leave-btn">
+          <span>EXIT</span>
         </button>
       </div>
-
-      <style>{`
-        @keyframes captureFlash {
-          0% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 }

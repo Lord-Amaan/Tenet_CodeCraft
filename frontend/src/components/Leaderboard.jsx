@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { socketService } from '../services/socket';
 import '../styles/Leaderboard.css';
 
+const MEDALS = ['🥇', '🥈', '🥉'];
+
 export function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState([]);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
     const updateLeaderboard = () => {
@@ -12,49 +14,38 @@ export function Leaderboard() {
         setLeaderboard(data.leaderboard);
       });
     };
-
-    // Update leaderboard initially
     updateLeaderboard();
-
-    // Update every 2 seconds
     const interval = setInterval(updateLeaderboard, 2000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className={`leaderboard ${expanded ? 'expanded' : 'collapsed'}`}>
-      <button className="toggle-btn" onClick={() => setExpanded(!expanded)}>
-        {expanded ? '▼' : '▲'} Leaderboard
+    <div className={`lb ${expanded ? 'lb-open' : 'lb-closed'}`}>
+      <button className="lb-toggle" onClick={() => setExpanded(!expanded)}>
+        <span className="lb-toggle-icon">{expanded ? '▾' : '▸'}</span>
+        <span className="lb-toggle-text">LEADERBOARD</span>
+        <span className="lb-count">{leaderboard.length}</span>
       </button>
 
       {expanded && (
-        <div className="leaderboard-content">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Player</th>
-                <th>Kills</th>
-                <th>Deaths</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.length > 0 ? (
-                leaderboard.map((entry, index) => (
-                  <tr key={entry.name} className={index === 0 ? 'top' : ''}>
-                    <td>{index + 1}</td>
-                    <td>{entry.name}</td>
-                    <td className="kills">{entry.kills}</td>
-                    <td className="deaths">{entry.deaths}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="4">No leaderboard data</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="lb-body">
+          {leaderboard.length > 0 ? (
+            <div className="lb-list">
+              {leaderboard.map((entry, i) => (
+                <div key={entry.name} className={`lb-row ${i === 0 ? 'lb-first' : ''} ${i < 3 ? 'lb-top3' : ''}`}>
+                  <span className="lb-rank">{i < 3 ? MEDALS[i] : `#${i + 1}`}</span>
+                  <span className="lb-name">{entry.name}</span>
+                  <div className="lb-kd">
+                    <span className="lb-k">{entry.kills}</span>
+                    <span className="lb-sep">/</span>
+                    <span className="lb-d">{entry.deaths}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="lb-empty">No players yet</p>
+          )}
         </div>
       )}
     </div>

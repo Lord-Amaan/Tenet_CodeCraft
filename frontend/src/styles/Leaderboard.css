@@ -1,94 +1,171 @@
-/* Leaderboard — Dark Theme */
-.leaderboard {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background: #1a1200;
-  border: 2px solid #b8960a;
-  border-radius: 6px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  z-index: 1000;
-  min-width: 280px;
-  max-width: 360px;
-  font-family: 'Courier New', monospace;
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* ── Leaderboard — Animated Premium ───────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+.lb {
+  background: rgba(20,16,4,0.85);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(200,170,60,0.15);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+  animation: fadeSlideIn 0.6s ease-out;
+  transition: border-color 0.3s;
+}
+.lb:hover {
+  border-color: rgba(200,170,60,0.3);
 }
 
-.leaderboard.collapsed {
-  width: auto;
-}
-
-.toggle-btn {
-  padding: 10px 14px;
-  background: linear-gradient(135deg, #cc8800, #aa6600);
-  border: none;
-  border-bottom: 1px solid #332800;
-  color: #fff;
-  border-radius: 6px 6px 0 0;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: bold;
-  font-family: 'Courier New', monospace;
-  letter-spacing: 2px;
-  transition: all 0.2s;
+/* ── Toggle button ──────────────────────────────────────────────────────── */
+.lb-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: rgba(240,208,72,0.7);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  transition: all 0.2s;
+}
+.lb-toggle:hover {
+  background: rgba(255,255,255,0.03);
+  color: #f0d048;
+}
+.lb-closed .lb-toggle {
+  border-bottom: none;
 }
 
-.leaderboard.collapsed .toggle-btn {
-  border-radius: 6px;
+.lb-toggle-icon {
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+.lb-toggle-text {
+  flex: 1;
+  text-align: left;
+}
+.lb-count {
+  background: rgba(240,208,72,0.15);
+  color: #f0d048;
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 700;
 }
 
-.toggle-btn:hover {
-  background: linear-gradient(135deg, #dd9900, #cc8800);
-}
-
-.leaderboard-content {
-  padding: 12px;
+/* ── Body ───────────────────────────────────────────────────────────────── */
+.lb-body {
+  padding: 8px 12px 12px;
   max-height: 300px;
   overflow-y: auto;
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.leaderboard table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
+.lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.leaderboard th {
-  background: #0e0a00;
-  padding: 8px;
-  text-align: left;
-  font-weight: bold;
-  color: #f0d048;
-  border-bottom: 1px solid #332800;
-  letter-spacing: 1px;
-  font-size: 10px;
+/* ── Row ────────────────────────────────────────────────────────────────── */
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  background: rgba(255,255,255,0.02);
+}
+.lb-row:hover {
+  background: rgba(255,255,255,0.05);
+}
+.lb-first {
+  background: rgba(240,208,72,0.08) !important;
+  border: 1px solid rgba(240,208,72,0.12);
+}
+.lb-top3 {
+  animation: rowSlide 0.4s ease-out backwards;
+}
+.lb-row:nth-child(1) { animation-delay: 0s; }
+.lb-row:nth-child(2) { animation-delay: 0.05s; }
+.lb-row:nth-child(3) { animation-delay: 0.1s; }
+@keyframes rowSlide {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-.leaderboard td {
-  padding: 7px 8px;
-  border-bottom: 1px solid #1a1200;
-  color: #aa8833;
-}
-
-.leaderboard tr:nth-child(even) {
-  background: rgba(184,150,10,0.04);
-}
-
-.leaderboard tr.top {
-  background: rgba(255,170,68,0.1);
-}
-
-.leaderboard tr.top td:first-child {
-  color: #ffaa44;
+.lb-rank {
+  min-width: 28px;
+  text-align: center;
   font-size: 14px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 700;
+}
+.lb-first .lb-rank {
+  font-size: 16px;
 }
 
-.leaderboard .kills {
-  color: #44ff88;
-  font-weight: bold;
+.lb-name {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-first .lb-name {
+  color: #f0d048;
 }
 
-.leaderboard .deaths {
-  color: #ff4422;
-  font-weight: bold;
+.lb-kd {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.lb-k {
+  color: #60e880;
+}
+.lb-sep {
+  color: rgba(255,255,255,0.2);
+}
+.lb-d {
+  color: #ff6060;
+}
+
+.lb-empty {
+  text-align: center;
+  color: rgba(255,255,255,0.25);
+  font-size: 12px;
+  padding: 16px;
+  font-style: italic;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+.lb-body::-webkit-scrollbar {
+  width: 4px;
+}
+.lb-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lb-body::-webkit-scrollbar-thumb {
+  background: rgba(240,208,72,0.2);
+  border-radius: 2px;
+}
+.lb-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(240,208,72,0.35);
 }

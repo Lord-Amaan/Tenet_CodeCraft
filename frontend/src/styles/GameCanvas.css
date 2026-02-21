@@ -1,2 +1,240 @@
-/* GameCanvas — all styles are inline to match the Land.IO reference */
-/* Only animation keyframes are defined in a <style> tag inside the component */
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* ── Land.io — Premium Game UI ────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+.gc-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: linear-gradient(135deg, #2a2518 0%, #1a1408 50%, #0e0a00 100%);
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ═══ Top HUD ══════════════════════════════════════════════════════════════ */
+.gc-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 8px 18px;
+  background: rgba(20,16,4,0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(200,170,60,0.2);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+  box-sizing: border-box;
+  animation: slideDown 0.4s ease-out;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.gc-hud-left {
+  display: flex;
+  align-items: center;
+}
+.gc-logo-wrap {
+  display: flex;
+  align-items: center;
+}
+.gc-logo {
+  font-weight: 900;
+  font-size: 20px;
+  color: #f0d048;
+  letter-spacing: 3px;
+  text-shadow: 0 0 12px rgba(240,208,72,0.3);
+}
+.gc-logo-dot {
+  color: #ff4444;
+  font-size: 24px;
+}
+
+.gc-hud-center {
+  flex: 1;
+  margin: 0 16px;
+  min-width: 120px;
+}
+.gc-bar-track {
+  position: relative;
+  height: 12px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.gc-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+}
+.gc-bar-shimmer {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  animation: shimmer 3s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 200%; }
+}
+.gc-bar-label {
+  display: block;
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 3px;
+  letter-spacing: 0.5px;
+}
+
+.gc-hud-stats {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.gc-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.gc-stat-icon {
+  font-size: 14px;
+  opacity: 0.7;
+}
+.gc-stat-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+}
+
+.gc-hud-right {
+  text-align: right;
+  min-width: 50px;
+}
+.gc-score {
+  font-size: 24px;
+  font-weight: 800;
+  color: #f0d048;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(240,208,72,0.2);
+  animation: scorePop 0.3s ease-out;
+}
+@keyframes scorePop {
+  0% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* ═══ Canvas Viewport ══════════════════════════════════════════════════════ */
+.gc-viewport {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(200,170,60,0.15),
+    0 8px 40px rgba(0,0,0,0.5),
+    inset 0 0 80px rgba(0,0,0,0.1);
+}
+.gc-canvas {
+  display: block;
+  background: #e8e0c0;
+}
+
+/* ═══ Capture Flash ════════════════════════════════════════════════════════ */
+.gc-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: captureFlash 0.4s ease-out forwards;
+  background: radial-gradient(ellipse at center, rgba(255,220,80,0.3) 0%, rgba(255,220,80,0) 70%);
+}
+@keyframes captureFlash {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; }
+  100% { opacity: 0; transform: scale(1.05); }
+}
+
+/* ═══ Footer ═══════════════════════════════════════════════════════════════ */
+.gc-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 6px;
+  padding: 6px 18px;
+  background: rgba(20,16,4,0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(200,170,60,0.15);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  box-sizing: border-box;
+  animation: slideUp 0.4s ease-out;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.gc-controls-grid {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.gc-controls-grid kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.5);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+}
+.gc-controls-sep {
+  color: rgba(255,255,255,0.25);
+  font-size: 10px;
+  margin: 0 4px;
+}
+
+.gc-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.3px;
+  flex: 1;
+  text-align: center;
+}
+
+.gc-leave-btn {
+  padding: 7px 22px;
+  background: linear-gradient(135deg, #e84040, #cc2020);
+  border: 1px solid rgba(255,100,100,0.3);
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(232,64,64,0.3);
+}
+.gc-leave-btn:hover {
+  background: linear-gradient(135deg, #ff5050, #e84040);
+  box-shadow: 0 4px 16px rgba(232,64,64,0.5);
+  transform: translateY(-1px);
+}
+.gc-leave-btn:active {
+  transform: translateY(0);
+}
