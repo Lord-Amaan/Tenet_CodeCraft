@@ -2,6 +2,26 @@ import { useState, useEffect } from 'react';
 import { socketService } from '../services/socket';
 import '../styles/Menu.css';
 
+// Safely import Clerk components — no-ops if Clerk isn't loaded
+let SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useUser;
+try {
+  const clerk = await import('@clerk/clerk-react');
+  SignedIn = clerk.SignedIn;
+  SignedOut = clerk.SignedOut;
+  SignInButton = clerk.SignInButton;
+  SignUpButton = clerk.SignUpButton;
+  UserButton = clerk.UserButton;
+  useUser = clerk.useUser;
+} catch {
+  // Fallback components when Clerk is not available
+  SignedIn = ({ children }) => null;
+  SignedOut = ({ children }) => children;
+  SignInButton = ({ children }) => null;
+  SignUpButton = ({ children }) => null;
+  UserButton = () => null;
+  useUser = () => ({ isSignedIn: false, user: null, isLoaded: true });
+}
+
 const ELEMENTS = [
   { name: 'LAVA', colorIndex: 0, emoji: '🔥', bg: '#cc2200', border: '#ff4422', glow: 'rgba(255,68,34,0.4)' },
   { name: 'OCEAN', colorIndex: 1, emoji: '🌊', bg: '#0044cc', border: '#4488ff', glow: 'rgba(68,136,255,0.4)' },
@@ -12,6 +32,7 @@ const ELEMENTS = [
 ];
 
 export function Menu({ onJoinRoom }) {
+  const { isSignedIn, user, isLoaded } = useUser();
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [rooms, setRooms] = useState([]);
@@ -19,6 +40,13 @@ export function Menu({ onJoinRoom }) {
   const [selectedElement, setSelectedElement] = useState(0);
   const [activeTab, setActiveTab] = useState('select');
   const [error, setError] = useState('');
+
+  // Auto-fill name from Clerk user
+  useEffect(() => {
+    if (isSignedIn && user && !playerName) {
+      setPlayerName(user.fullName || user.username || user.firstName || '');
+    }
+  }, [isSignedIn, user]);
 
   useEffect(() => {
     const loadRooms = async () => {
@@ -96,6 +124,34 @@ export function Menu({ onJoinRoom }) {
           <span className="title-icon">🍄</span>
           <h1>GameOfLands</h1>
           <p className="subtitle">TERRITORY WARS</p>
+        </div>
+
+        {/* Auth Section */}
+        <div className="auth-section">
+          <SignedIn>
+            <div className="auth-signed-in">
+              <UserButton afterSignOutUrl="/" />
+              <span className="auth-welcome">
+                Welcome, <strong>{user?.firstName || user?.username || 'Player'}</strong>
+              </span>
+              <span className="auth-badge auth-badge-pro">✓ Stats saved</span>
+            </div>
+          </SignedIn>
+          <SignedOut>
+            <div className="auth-guest-banner">
+              <span className="guest-banner-text">
+                🎮 Playing as Guest — sign in to save progress
+              </span>
+              <div className="auth-buttons">
+                <SignInButton mode="modal">
+                  <button className="auth-btn auth-signin-btn">Sign In</button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button className="auth-btn auth-signup-btn">Sign Up</button>
+                </SignUpButton>
+              </div>
+            </div>
+          </SignedOut>
         </div>
 
         {/* Player Name */}
