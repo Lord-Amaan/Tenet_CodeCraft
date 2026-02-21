@@ -1208,13 +1208,21 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
           }
         }
 
-        // ── Trail tiles ────────────────────────────────────────────────
+        // ── Trail tiles (render on neutral OR enemy territory) ──────────
         const tci = trailMap[k];
-        if (tci !== undefined && oci === undefined) {
+        if (tci !== undefined && (oci === undefined || oci !== tci)) {
           const tc = PLAYER_COLORS[tci];
+
+          // If on enemy territory, first darken the enemy tile before drawing trail
+          if (oci !== undefined && oci !== tci) {
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.fillRect(px, py, TILE, TILE);
+          }
+
           const pulse = 0.35 + Math.sin(time * 4 + col * 0.5 + row * 0.7) * 0.12;
+          const intensity = oci !== undefined ? pulse + 0.15 : pulse; // brighter on enemy tiles
           ctx.fillStyle = tc.trail;
-          ctx.globalAlpha = pulse;
+          ctx.globalAlpha = intensity;
           ctx.fillRect(px + 1, py + 1, TILE - 2, TILE - 2);
           ctx.globalAlpha = 1;
 
