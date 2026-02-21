@@ -1,20 +1,27 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import { requireClerkAuth, getClerkUserId } from '../middleware/auth.js';
 import User from '../models/User.js';
 import GameStats from '../models/GameStats.js';
 
 const router = express.Router();
 
+// Helper to check DB connection
+function dbReady() {
+  return mongoose.connection.readyState === 1;
+}
+
 // ── POST /api/save-score ─────────────────────────────────────────────
-// Protected: saves a game score for the authenticated user
+// Protected: saves or updates a game session for the authenticated user.
+// If sessionId is provided, upserts the same record (for periodic saves).
 router.post('/save-score', requireClerkAuth, async (req, res) => {
   try {
-    const clerkUserId = getClerkUserId(req);
-    if (!clerkUserId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
 
-    const { score, kills, deaths, territoryPercent, username } = req.body;
+    const clerkUserId = getClerkUserId(req);
+    const { score, kills, deaths, territoryPercent, username, sessionId } = req.body;
+
+    if (!clerkUserId) return res.status(401).json({ error: 'Not authenticated' });
 
     // Upsert user record
     await User.findOneAndUpdate(
@@ -23,16 +30,30 @@ router.post('/save-score', requireClerkAuth, async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Save game stats
-    const stats = await GameStats.create({
+    const statsData = {
       clerkUserId,
       score: score || 0,
       kills: kills || 0,
       deaths: deaths || 0,
       territoryPercent: territoryPercent || 0,
-    });
+    };
 
-    res.json({ success: true, stats });
+    let stats;
+    if (sessionId) {
+      // Upsert: update existing session record or create new
+      stats = await GameStats.findOneAndUpdate(
+        { clerkUserId, sessionId },
+        { ...statsData, sessionId },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      console.log(`📊 Session ${sessionId} saved for ${clerkUserId}: score=${score} kills=${kills} deaths=${deaths}`);
+    } else {
+      // No session — create a new record (legacy / one-off save)
+      stats = await GameStats.create(statsData);
+      console.log(`📊 Score saved for ${clerkUserId}: score=${score} kills=${kills} deaths=${deaths}`);
+    }
+
+    res.json({ success: true, statsId: stats._id });
   } catch (err) {
     console.error('Error saving score:', err);
     res.status(500).json({ error: 'Failed to save score' });
@@ -43,34 +64,37 @@ router.post('/save-score', requireClerkAuth, async (req, res) => {
 // Protected: returns the authenticated user's stats
 router.get('/my-stats', requireClerkAuth, async (req, res) => {
   try {
-    const clerkUserId = getClerkUserId(req);
-    if (!clerkUserId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
 
-    const user = await User.findOne({ clerkUserId });
+    const clerkUserId = getClerkUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Not authenticated' });
+
     const games = await GameStats.find({ clerkUserId })
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(50)
+      .lean();
 
     const totalGames = await GameStats.countDocuments({ clerkUserId });
     const bestScore = games.length > 0
       ? Math.max(...games.map(g => g.score))
       : 0;
-    const totalKills = games.reduce((sum, g) => sum + g.kills, 0);
-    const totalDeaths = games.reduce((sum, g) => sum + g.deaths, 0);
+    const totalKills = games.reduce((sum, g) => sum + (g.kills || 0), 0);
+    const totalDeaths = games.reduce((sum, g) => sum + (g.deaths || 0), 0);
+    const avgTerritory = games.length > 0
+      ? Math.round(games.reduce((sum, g) => sum + (g.territoryPercent || 0), 0) / games.length)
+      : 0;
 
     res.json({
       success: true,
-      user: user ? { username: user.username, createdAt: user.createdAt } : null,
       summary: {
         totalGames,
         bestScore,
         totalKills,
         totalDeaths,
-        kd: totalDeaths > 0 ? (totalKills / totalDeaths).toFixed(2) : totalKills.toFixed(2),
+        avgTerritory,
+        kd: totalDeaths > 0 ? (totalKills / totalDeaths) : totalKills,
       },
-      recentGames: games,
+      recentGames: games.slice(0, 20),
     });
   } catch (err) {
     console.error('Error fetching stats:', err);
@@ -82,11 +106,10 @@ router.get('/my-stats', requireClerkAuth, async (req, res) => {
 // Protected: syncs guest stats from localStorage after sign-in
 router.post('/sync-guest', requireClerkAuth, async (req, res) => {
   try {
-    const clerkUserId = getClerkUserId(req);
-    if (!clerkUserId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
 
+    const clerkUserId = getClerkUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Not authenticated' });
     const { guestGames, username } = req.body;
 
     // Upsert user
@@ -107,6 +130,7 @@ router.post('/sync-guest', requireClerkAuth, async (req, res) => {
         createdAt: g.createdAt ? new Date(g.createdAt) : new Date(),
       }));
       await GameStats.insertMany(docs);
+      console.log(`📊 Synced ${docs.length} guest games for ${clerkUserId}`);
     }
 
     res.json({ success: true, synced: guestGames?.length || 0 });
@@ -120,7 +144,8 @@ router.post('/sync-guest', requireClerkAuth, async (req, res) => {
 // Public: returns top players by best score
 router.get('/leaderboard', async (req, res) => {
   try {
-    // Aggregate best score per user
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
+
     const leaders = await GameStats.aggregate([
       {
         $group: {

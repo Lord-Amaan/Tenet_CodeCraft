@@ -850,6 +850,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   const [gameState, setGameState] = useState(null);
   const [flashCapture, setFlashCapture] = useState(false);
   const [viewportSize, setViewportSize] = useState({ w: 800, h: 600 });
+  const viewportRef = useRef(null);
   const prevScoreRef = useRef(0);
   const playerIdRef = useRef(playerId);
   const roomCodeRef = useRef(roomCode);
@@ -880,17 +881,20 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
   useEffect(() => { onStatsUpdateRef.current = onStatsUpdate; }, [onStatsUpdate]);
 
-  // ── Viewport resize ────────────────────────────────────────────────────
+  // ── Viewport resize (ResizeObserver on the viewport container) ─────────
   useEffect(() => {
-    const measure = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setViewportSize({ w: rect.width, h: rect.height - 90 });
+    const el = viewportRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setViewportSize({ w: Math.round(width), h: Math.round(height) });
+        }
       }
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   // ── Keyboard ───────────────────────────────────────────────────────────
@@ -1510,13 +1514,13 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   const kills = localPlayer?.kills || 0;
   const deaths = localPlayer?.deaths || 0;
 
-  const vpW = Math.min(viewportSize.w, 1400);
-  const vpH = Math.min(viewportSize.h, 800);
+  const vpW = viewportSize.w;
+  const vpH = viewportSize.h;
 
   return (
     <div ref={containerRef} className="gc-root">
       {/* ── Top HUD ─────────────────────────────────────────────────────── */}
-      <div className="gc-hud" style={{ width: vpW }}>
+      <div className="gc-hud">
         <div className="gc-hud-left">
           <div className="gc-logo-wrap">
             <span className="gc-logo">GameOfLands</span>
@@ -1545,7 +1549,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
       </div>
 
       {/* ── Canvas ──────────────────────────────────────────────────────── */}
-      <div className="gc-viewport" style={{ width: vpW, height: vpH }}>
+      <div ref={viewportRef} className="gc-viewport">
         <canvas
           ref={canvasRef}
           width={vpW}
@@ -1556,7 +1560,11 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
       </div>
 
       {/* ── Bottom bar ──────────────────────────────────────────────────── */}
-      <div className="gc-footer" style={{ width: vpW }}>
+      <div className="gc-footer">
+        <div className="gc-room-tag">
+          <span className="gc-room-code">{roomCode}</span>
+          <span className="gc-room-players">{gameState?.players?.length || 0} online</span>
+        </div>
         <div className="gc-controls-grid">
           <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
           <span className="gc-controls-sep">or</span>

@@ -6,6 +6,11 @@ const gameStatsSchema = new mongoose.Schema({
     required: true,
     index: true,
   },
+  sessionId: {
+    type: String,
+    index: true,
+    sparse: true,
+  },
   score: {
     type: Number,
     default: 0,

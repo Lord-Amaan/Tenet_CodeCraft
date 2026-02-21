@@ -7,13 +7,14 @@ import mongoose from 'mongoose';
 import RoomManager from './rooms/RoomManager.js';
 import { setupSocketHandlers } from './events/socketHandlers.js';
 import { clerkAuth } from './middleware/auth.js';
+import { getAuth } from '@clerk/express';
 import apiRoutes from './routes/api.js';
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: '*', // Allow all origins in development
+    origin: '*',
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -21,13 +22,16 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3000;
 const GAME_TICK = 16; // ~60 FPS
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/gameofllands';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/gameoflands';
 
 // ── Connect to MongoDB ───────────────────────────────────────────────
 mongoose
   .connect(MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+  .then(() => console.log('✅ MongoDB connected to', MONGODB_URI.replace(/\/\/.*@/, '//***@')))
+  .catch((err) => {
+    console.error('❌ MongoDB connection error:', err.message);
+    console.log('⚠️  Server will run without database — stats will NOT persist');
+  });
 
 // Initialize room manager
 const roomManager = new RoomManager();
@@ -41,11 +45,18 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
-app.use(clerkAuth); // Attach Clerk auth to all requests
+
+// Clerk middleware — attaches auth state to every request (does NOT block)
+app.use(clerkAuth);
 
 // Routes
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'Server is running' });
+  const auth = getAuth(req);
+  res.json({
+    status: 'Server is running',
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    auth: auth?.userId ? `authenticated as ${auth.userId}` : 'not authenticated',
+  });
 });
 
 app.get('/api/rooms', (req, res) => {

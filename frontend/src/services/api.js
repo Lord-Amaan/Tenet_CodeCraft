@@ -3,9 +3,8 @@
 
 const API_BASE = 'http://localhost:3000/api';
 
-async function authFetch(path, options = {}, getToken) {
-  const headers = { 'Content-Type': 'application/json', ...options.headers };
-
+async function getAuthHeaders(getToken) {
+  const headers = { 'Content-Type': 'application/json' };
   if (getToken) {
     try {
       const token = await getToken();
@@ -16,39 +15,40 @@ async function authFetch(path, options = {}, getToken) {
       console.warn('Failed to get auth token:', err);
     }
   }
+  return headers;
+}
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `HTTP ${res.status}`);
-  }
+// Save score (authenticated)
+export async function saveScore(getToken, data) {
+  const headers = await getAuthHeaders(getToken);
+  const res = await fetch(`${API_BASE}/save-score`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
   return res.json();
 }
 
-export const api = {
-  // Save score (authenticated)
-  saveScore(data, getToken) {
-    return authFetch('/save-score', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }, getToken);
-  },
+// Get my stats (authenticated)
+export async function getMyStats(getToken) {
+  const headers = await getAuthHeaders(getToken);
+  const res = await fetch(`${API_BASE}/my-stats`, { headers });
+  return res.json();
+}
 
-  // Get my stats (authenticated)
-  getMyStats(getToken) {
-    return authFetch('/my-stats', {}, getToken);
-  },
+// Sync guest stats after login (authenticated)
+export async function syncGuestStats(getToken, guestGames, username) {
+  const headers = await getAuthHeaders(getToken);
+  const res = await fetch(`${API_BASE}/sync-guest`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ guestGames, username }),
+  });
+  return res.json();
+}
 
-  // Sync guest stats after login (authenticated)
-  syncGuest(guestGames, username, getToken) {
-    return authFetch('/sync-guest', {
-      method: 'POST',
-      body: JSON.stringify({ guestGames, username }),
-    }, getToken);
-  },
-
-  // Get public leaderboard
-  getLeaderboard() {
-    return authFetch('/leaderboard');
-  },
-};
+// Get public leaderboard
+export async function getLeaderboard() {
+  const res = await fetch(`${API_BASE}/leaderboard`);
+  return res.json();
+}

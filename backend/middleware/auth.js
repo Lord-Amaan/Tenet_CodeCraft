@@ -1,12 +1,14 @@
-import { clerkMiddleware, requireAuth, getAuth } from '@clerk/express';
+import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express';
 
-// Base Clerk middleware — attaches auth to every request
+// Global middleware — call app.use(clerkAuth) BEFORE routes.
+// This does NOT block requests; it just attaches auth state to req.
 export const clerkAuth = clerkMiddleware();
 
-// Middleware to protect routes — rejects unauthenticated requests
+// Route-level middleware — blocks unauthenticated requests with 401.
 export const requireClerkAuth = requireAuth();
 
-// Helper to extract userId from verified token
+// Helper — call inside a route handler to get the userId.
+// Returns the Clerk userId string or null.
 export function getClerkUserId(req) {
   const auth = getAuth(req);
   return auth?.userId || null;
