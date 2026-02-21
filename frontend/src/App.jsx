@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { Menu } from './components/Menu';
 import { GameCanvas } from './components/GameCanvas';
 import { HUD } from './components/HUD';
@@ -18,34 +18,8 @@ function App() {
     playerCount: 0,
   });
 
-  // Store join info in refs so the effect listener can access latest values
-  const roomCodeRef = useRef(null);
-  const playerIdRef = useRef(null);
-
-  // Single persistent listener for game updates (stats for HUD)
-  useEffect(() => {
-    const handleGameUpdate = (data) => {
-      if (data && data.roomCode === roomCodeRef.current) {
-        const player = data.gameState.players.find((p) => p.id === playerIdRef.current);
-        if (player) {
-          setPlayerStats({
-            kills: player.kills,
-            deaths: player.deaths,
-            score: player.score,
-            playerCount: data.playerCount,
-          });
-        }
-      }
-    };
-
-    socketService.on('game:update', handleGameUpdate);
-    return () => socketService.off('game:update', handleGameUpdate);
-  }, []);
-
   const handleJoinRoom = (code, name, id) => {
     console.log('📍 handleJoinRoom called:', { code, name, id });
-    roomCodeRef.current = code;
-    playerIdRef.current = id;
     setRoomCode(code);
     setPlayerName(name);
     setPlayerId(id);
@@ -54,13 +28,15 @@ function App() {
 
   const handleLeaveRoom = () => {
     socketService.emit('room:leave');
-    roomCodeRef.current = null;
-    playerIdRef.current = null;
     setGameState('menu');
     setRoomCode(null);
     setPlayerName(null);
     setPlayerId(null);
   };
+
+  const handleStatsUpdate = useCallback((stats) => {
+    setPlayerStats(stats);
+  }, []);
 
   return (
     <div className="app">
@@ -74,6 +50,7 @@ function App() {
               playerName={playerName}
               playerId={playerId}
               onLeaveRoom={handleLeaveRoom}
+              onStatsUpdate={handleStatsUpdate}
             />
           </div>
           <div className="game-sidebar">

@@ -1,309 +1,343 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { socketService } from '../services/socket';
 import '../styles/GameCanvas.css';
 
-export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom }) {
-  const canvasRef = useRef(null);
-  const [gameState, setGameState] = useState({ players: [] });
-  const [playerCount, setPlayerCount] = useState(1);
-  const [localPlayer, setLocalPlayer] = useState(null);
-  const keysPressed = useRef({});
+const TILE = 44;
+const COLS = 20;
+const ROWS = 14;
 
-  // Create refs to store latest state without triggering re-renders
-  const gameStateRef = useRef(gameState);
-  const localPlayerRef = useRef(localPlayer);
-  const playerCountRef = useRef(playerCount);
-  const playerNameRef = useRef(playerName);
+// ── Player color palettes ────────────────────────────────────────────────────
+const PLAYER_COLORS = [
+  { owned: 'rgba(204,34,0,0.52)', ownedDot: '#ff6644', trail: 'rgba(255,50,20,0.38)', trailLine: '#ff4422', trailGlow: 'rgba(255,60,30,0.55)', headGrad: ['#ff5533','#cc1100'], headBorder: '#ff9977', barFrom: '#cc2200', barTo: '#ff4422' },
+  { owned: 'rgba(0,68,204,0.52)', ownedDot: '#4488ff', trail: 'rgba(34,102,255,0.38)', trailLine: '#2266ff', trailGlow: 'rgba(30,60,255,0.55)', headGrad: ['#5577ff','#0011cc'], headBorder: '#7799ff', barFrom: '#0044cc', barTo: '#2266ff' },
+  { owned: 'rgba(0,170,68,0.52)', ownedDot: '#44ff88', trail: 'rgba(34,221,102,0.38)', trailLine: '#22dd66', trailGlow: 'rgba(30,255,60,0.55)', headGrad: ['#55ff77','#00cc11'], headBorder: '#77ff99', barFrom: '#00aa44', barTo: '#22dd66' },
+  { owned: 'rgba(204,136,0,0.52)', ownedDot: '#ffaa44', trail: 'rgba(255,170,34,0.38)', trailLine: '#ffaa22', trailGlow: 'rgba(255,170,30,0.55)', headGrad: ['#ffaa55','#cc8800'], headBorder: '#ffcc77', barFrom: '#cc8800', barTo: '#ffaa22' },
+  { owned: 'rgba(136,0,204,0.52)', ownedDot: '#bb44ff', trail: 'rgba(170,34,255,0.38)', trailLine: '#aa22ff', trailGlow: 'rgba(170,30,255,0.55)', headGrad: ['#bb55ff','#8800cc'], headBorder: '#cc77ff', barFrom: '#8800cc', barTo: '#aa22ff' },
+  { owned: 'rgba(0,170,170,0.52)', ownedDot: '#44ffff', trail: 'rgba(34,221,221,0.38)', trailLine: '#22dddd', trailGlow: 'rgba(30,255,255,0.55)', headGrad: ['#55ffff','#00cccc'], headBorder: '#77ffff', barFrom: '#00aaaa', barTo: '#22dddd' },
+];
+
+// ── Neutral tile colors ──────────────────────────────────────────────────────
+const NEUTRAL_COLORS = [
+  { bg: '#e8c832', dot: '#c8a818' },
+  { bg: '#d4b820', dot: '#b89a10' },
+  { bg: '#f0d048', dot: '#d4b030' },
+  { bg: '#c8aa18', dot: '#a88c08' },
+  { bg: '#e0c030', dot: '#c4a420' },
+];
+
+function getDots(seed) {
+  const rng = (n) => {
+    let x = Math.sin(seed * 9301 + n * 49297 + 233720) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  const count = 2 + Math.floor(rng(0) * 3);
+  return Array.from({ length: count }, (_, i) => ({
+    x: 6 + rng(i * 2 + 1) * (TILE - 12),
+    y: 6 + rng(i * 2 + 2) * (TILE - 12),
+    r: 2 + rng(i * 3 + 3) * 4,
+  }));
+}
+
+// ── Memoized neutral tile ────────────────────────────────────────────────────
+const NeutralTile = memo(function NeutralTile({ col, row }) {
+  const seed = col * 100 + row;
+  const ci = (col + row * 3 + Math.floor(seed * 0.37)) % NEUTRAL_COLORS.length;
+  const { bg, dot } = NEUTRAL_COLORS[ci];
+  const brightness = 0.88 + ((seed * 17) % 23) / 100;
+  const dots = getDots(seed);
+  return (
+    <svg width={TILE} height={TILE} viewBox={`0 0 ${TILE} ${TILE}`} style={{ display: 'block' }}>
+      <defs>
+        <radialGradient id={`ng${col}_${row}`} cx="30%" cy="25%" r="70%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0.08)" />
+        </radialGradient>
+      </defs>
+      <rect width={TILE} height={TILE} fill={bg} style={{ filter: `brightness(${brightness})` }} />
+      <rect width={TILE} height={TILE} fill={`url(#ng${col}_${row})`} />
+      {dots.map((d, i) => (
+        <circle key={i} cx={d.x} cy={d.y} r={d.r} fill={dot} opacity={0.6 + ((i * seed) % 10) / 40} />
+      ))}
+    </svg>
+  );
+});
+
+// ── Main component ───────────────────────────────────────────────────────────
+export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStatsUpdate }) {
+  const [gameState, setGameState] = useState(null);
+  const [flashCapture, setFlashCapture] = useState(false);
+  const prevScoreRef = useRef(0);
   const playerIdRef = useRef(playerId);
   const roomCodeRef = useRef(roomCode);
+  const onStatsUpdateRef = useRef(onStatsUpdate);
 
-  const CELL_SIZE = 32; // pixels per cell
-  const GRID_SIZE = 100; // 100x100 grid
-  const CANVAS_WIDTH = 800;
-  const CANVAS_HEIGHT = 600;
+  useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
+  useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
+  useEffect(() => { onStatsUpdateRef.current = onStatsUpdate; }, [onStatsUpdate]);
 
-  // Tile colors
-  const TILE_COLORS = {
-    grass: '#90EE90',
-    water: '#4192FF',
-    stone: '#A9A9A9',
-  };
-
-  // Sync refs when state changes (don't depend on these in effects!)
-  useEffect(() => {
-    gameStateRef.current = gameState;
-  }, [gameState]);
-
-  useEffect(() => {
-    localPlayerRef.current = localPlayer;
-  }, [localPlayer]);
-
-  useEffect(() => {
-    playerCountRef.current = playerCount;
-  }, [playerCount]);
-
-  useEffect(() => {
-    playerNameRef.current = playerName;
-  }, [playerName]);
-
-  useEffect(() => {
-    roomCodeRef.current = roomCode;
-  }, [roomCode]);
-
-  useEffect(() => {
-    playerIdRef.current = playerId;
-  }, [playerId]);
-
-  // Send movement to server
-  const sendMovement = () => {
-    const direction = {
-      up: keysPressed.current['w'] || keysPressed.current['arrowup'],
-      down: keysPressed.current['s'] || keysPressed.current['arrowdown'],
-      left: keysPressed.current['a'] || keysPressed.current['arrowleft'],
-      right: keysPressed.current['d'] || keysPressed.current['arrowright'],
-    };
-
-    socketService.emit('player:move', direction);
-  };
-
-  // Handle keyboard input
+  // ── Keyboard → send direction to server ──────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (document.activeElement.tagName === 'INPUT') return;
-
-      const key = e.key.toLowerCase();
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
-        keysPressed.current[key] = true;
+      const moves = {
+        ArrowUp: { x: 0, y: -1 }, w: { x: 0, y: -1 }, W: { x: 0, y: -1 },
+        ArrowDown: { x: 0, y: 1 }, s: { x: 0, y: 1 }, S: { x: 0, y: 1 },
+        ArrowLeft: { x: -1, y: 0 }, a: { x: -1, y: 0 }, A: { x: -1, y: 0 },
+        ArrowRight: { x: 1, y: 0 }, d: { x: 1, y: 0 }, D: { x: 1, y: 0 },
+      };
+      if (moves[e.key]) {
         e.preventDefault();
+        socketService.emit('player:move', moves[e.key]);
       }
     };
-
-    const handleKeyUp = (e) => {
-      if (document.activeElement.tagName === 'INPUT') return;
-
-      const key = e.key.toLowerCase();
-      keysPressed.current[key] = false;
-    };
-
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Continuous movement loop
-  useEffect(() => {
-    const movementInterval = setInterval(() => {
-      sendMovement();
-    }, 50);
-
-    return () => clearInterval(movementInterval);
-  }, []);
-
-  // Socket events
+  // ── Socket listener ──────────────────────────────────────────────────────
   useEffect(() => {
     const handleGameUpdate = (data) => {
       if (data && data.roomCode === roomCodeRef.current) {
         setGameState(data.gameState);
-        setPlayerCount(data.playerCount);
-
-        // Find local player by stable ID
-        const local = data.gameState.players.find(
-          (p) => p.id === playerIdRef.current
-        );
-        // NEVER reset to null - keep previous value if temporarily missing
+        const local = data.gameState.players.find(p => p.id === playerIdRef.current);
         if (local) {
-          console.log('✅ Local player found:', local);
-          setLocalPlayer(local);
-        } else {
-          console.warn('⚠️ Local player NOT found in update. Looking for ID:', playerIdRef.current, 'Available players:', data.gameState.players.map(p => p.id));
+          if (local.score > prevScoreRef.current && prevScoreRef.current > 0) {
+            setFlashCapture(true);
+            setTimeout(() => setFlashCapture(false), 300);
+          }
+          prevScoreRef.current = local.score;
+          if (onStatsUpdateRef.current) {
+            onStatsUpdateRef.current({
+              kills: local.kills,
+              deaths: local.deaths,
+              score: local.score,
+              playerCount: data.playerCount,
+            });
+          }
         }
       }
     };
 
     const handlePlayerJoined = (data) => {
-      if (data && data.gameState) {
-        setGameState(data.gameState);
-        setPlayerCount(data.playerCount);
-        
-        // Find local player by stable ID
-        const local = data.gameState.players.find(
-          (p) => p.id === playerIdRef.current
-        );
-        // NEVER reset to null - keep previous value if temporarily missing
-        if (local) {
-          setLocalPlayer(local);
-        }
-      }
-    };
-
-    const handlePlayerLeft = (data) => {
-      if (data && data.playerCount !== undefined) {
-        setPlayerCount(data.playerCount);
-      }
+      if (data && data.gameState) setGameState(data.gameState);
     };
 
     socketService.on('game:update', handleGameUpdate);
     socketService.on('room:playerJoined', handlePlayerJoined);
-    socketService.on('room:playerLeft', handlePlayerLeft);
-
-    // Cleanup for these specific handlers
     return () => {
       socketService.off('game:update', handleGameUpdate);
       socketService.off('room:playerJoined', handlePlayerJoined);
-      socketService.off('room:playerLeft', handlePlayerLeft);
     };
   }, []);
 
-  // Game rendering - runs only ONCE
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // ── Build render data ────────────────────────────────────────────────────
+  const localPlayer = gameState?.players?.find(p => p.id === playerId);
+  const score = localPlayer?.score || 0;
+  const pct = Math.round((score / (COLS * ROWS)) * 100);
+  const isDead = localPlayer?.dead || false;
+  const localCI = localPlayer?.colorIndex ?? 0;
+  const colors = PLAYER_COLORS[localCI];
 
-    const ctx = canvas.getContext('2d');
-    let animationId;
+  const ownershipMap = {};
+  const trailMap = {};
+  const headMap = {};
 
-    const renderGame = () => {
-      // Read from refs - always get latest state
-      const gameState = gameStateRef.current;
-      const localPlayer = localPlayerRef.current;
-      const playerCount = playerCountRef.current;
-      const playerName = playerNameRef.current;
+  if (gameState?.players) {
+    for (const player of gameState.players) {
+      if (player.owned) for (const k of player.owned) ownershipMap[k] = player.colorIndex;
+      if (player.trail) for (const k of player.trail) trailMap[k] = player.colorIndex;
+      if (!player.dead) headMap[`${player.x},${player.y}`] = player;
+    }
+  }
 
-      // Clear canvas with default background
-      ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      if (!localPlayer) {
-        // Loading state
-        ctx.fillStyle = '#fff';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Waiting for game data...', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-        animationId = requestAnimationFrame(renderGame);
-        return;
-      }
-
-      // Calculate camera position (center on local player)
-      const cameraX = Math.max(0, Math.min(
-        (GRID_SIZE * CELL_SIZE) - CANVAS_WIDTH,
-        (localPlayer.gridX * CELL_SIZE) - (CANVAS_WIDTH / 2)
-      ));
-
-      const cameraY = Math.max(0, Math.min(
-        (GRID_SIZE * CELL_SIZE) - CANVAS_HEIGHT,
-        (localPlayer.gridY * CELL_SIZE) - (CANVAS_HEIGHT / 2)
-      ));
-
-      // Draw grid background
-      ctx.fillStyle = '#2a2a2a';
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      // Draw grid cells (visible area only)
-      const startGridX = Math.floor(cameraX / CELL_SIZE);
-      const startGridY = Math.floor(cameraY / CELL_SIZE);
-      const endGridX = Math.ceil((cameraX + CANVAS_WIDTH) / CELL_SIZE);
-      const endGridY = Math.ceil((cameraY + CANVAS_HEIGHT) / CELL_SIZE);
-
-      for (let y = startGridY; y < endGridY && y < GRID_SIZE; y++) {
-        for (let x = startGridX; x < endGridX && x < GRID_SIZE; x++) {
-          const screenX = (x * CELL_SIZE) - cameraX;
-          const screenY = (y * CELL_SIZE) - cameraY;
-
-          // Randomize tile colors based on position (for visual variety)
-          let tileColor = TILE_COLORS.grass;
-          const seed = (x * 73856093) ^ (y * 19349663);
-          const rand = Math.abs(Math.sin(seed)) % 1;
-
-          if (rand > 0.85) {
-            tileColor = TILE_COLORS.water;
-          } else if (rand > 0.7) {
-            tileColor = TILE_COLORS.stone;
-          }
-
-          ctx.fillStyle = tileColor;
-          ctx.fillRect(screenX, screenY, CELL_SIZE, CELL_SIZE);
-
-          // Draw grid lines
-          ctx.strokeStyle = '#444';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(screenX, screenY, CELL_SIZE, CELL_SIZE);
-        }
-      }
-
-      // Draw players
-      gameState.players.forEach((player) => {
-        const screenX = (player.gridX * CELL_SIZE) - cameraX;
-        const screenY = (player.gridY * CELL_SIZE) - cameraY;
-
-        // Draw player box
-        ctx.fillStyle = player.color;
-        ctx.fillRect(screenX + 2, screenY + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-
-        // Draw border
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(screenX + 2, screenY + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-
-        // Draw player name
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 10px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(player.name, screenX + CELL_SIZE / 2, screenY + CELL_SIZE / 2);
-
-        // Highlight local player
-        if (player.name === playerName) {
-          ctx.strokeStyle = '#FFD700';
-          ctx.lineWidth = 3;
-          ctx.strokeRect(screenX + 1, screenY + 1, CELL_SIZE - 2, CELL_SIZE - 2);
-        }
-      });
-
-      // Draw HUD (top-left)
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.fillRect(5, 5, 200, 100);
-
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px Arial';
-      ctx.textAlign = 'left';
-      ctx.fillText(`Player: ${playerName}`, 15, 25);
-
-      ctx.font = '12px Arial';
-      ctx.fillText(`Kills: ${localPlayer.kills}`, 15, 45);
-      ctx.fillText(`Deaths: ${localPlayer.deaths}`, 15, 60);
-      ctx.fillText(`Score: ${localPlayer.score}`, 15, 75);
-      ctx.fillText(`Players: ${playerCount}`, 15, 90);
-
-      animationId = requestAnimationFrame(renderGame);
-    };
-
-    renderGame();
-
-    // Cleanup - cancel animation frame
-    return () => cancelAnimationFrame(animationId);
-  }, []); // Empty dependency array - runs only ONCE
-
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="game-container">
-      <div className="game-header">
-        <h2>Land.io - Room {roomCode}</h2>
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', height: '100%', background: '#0e0a00',
+      fontFamily: "'Courier New', monospace", userSelect: 'none',
+    }}>
+      {/* ── HUD bar ────────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        width: COLS * TILE + 6, marginBottom: 8, padding: '6px 14px',
+        background: '#1a1200', border: '2px solid #b8960a', borderRadius: 4, boxSizing: 'border-box',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, background: '#2a1e00', border: '2px solid #b8960a',
+            borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+          }}>🍄</div>
+          <span style={{ color: '#f0d048', fontWeight: 'bold', fontSize: 16, letterSpacing: 3 }}>LAND.IO</span>
+        </div>
+        <div style={{ flex: 1, margin: '0 20px' }}>
+          <div style={{ color: '#664400', fontSize: 9, letterSpacing: 2, marginBottom: 3 }}>TERRITORY</div>
+          <div style={{ height: 10, background: '#2a1e00', borderRadius: 5, border: '1px solid #554400', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', width: `${pct}%`,
+              background: `linear-gradient(90deg, ${colors.barFrom}, ${colors.barTo})`,
+              borderRadius: 5, transition: 'width 0.15s ease',
+              boxShadow: flashCapture ? '0 0 10px rgba(255,80,40,0.9)' : 'none',
+            }} />
+          </div>
+          <div style={{ color: '#f0d048', fontSize: 10, marginTop: 2, letterSpacing: 1 }}>{pct}% ({score} tiles)</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ color: '#554400', fontSize: 9, letterSpacing: 2 }}>TILES</div>
+          <div style={{
+            color: flashCapture ? '#ffaa44' : '#f0d048', fontSize: 20, fontWeight: 'bold',
+            letterSpacing: 2, transition: 'color 0.15s',
+          }}>{String(score).padStart(3, '0')}</div>
+        </div>
       </div>
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="game-canvas"
-      />
-      <div className="game-footer">
-        <p>Use ↑↓←→ or WASD to move around the grid</p>
-        <button onClick={onLeaveRoom} className="leave-btn">
-          Leave Game
+
+      {/* ── Grid ───────────────────────────────────────────────────────── */}
+      <div style={{
+        position: 'relative', display: 'inline-flex', flexDirection: 'column',
+        border: '3px solid #b8960a', boxShadow: '0 4px 40px rgba(0,0,0,0.7)',
+        overflow: 'hidden', borderRadius: 4,
+      }}>
+        {/* Pink top stripe */}
+        <div style={{ height: 4, background: 'linear-gradient(90deg,#ff88bb,#ff44aa,#cc3388)', flexShrink: 0 }} />
+
+        {Array.from({ length: ROWS }, (_, row) => (
+          <div key={row} style={{ display: 'flex' }}>
+            {Array.from({ length: COLS }, (_, col) => {
+              const k = `${col},${row}`;
+              const ownerCI = ownershipMap[k];
+              const trailCI = trailMap[k];
+              const headPlayer = headMap[k];
+
+              return (
+                <div key={col} style={{
+                  position: 'relative', width: TILE, height: TILE, flexShrink: 0,
+                  outline: '1px solid rgba(0,0,0,0.13)', outlineOffset: '-1px',
+                }}>
+                  <NeutralTile col={col} row={row} />
+
+                  {/* Owned overlay */}
+                  {ownerCI !== undefined && (
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: PLAYER_COLORS[ownerCI].owned,
+                      borderTop: '1px solid rgba(255,80,60,0.25)',
+                      borderLeft: '1px solid rgba(255,80,60,0.15)',
+                    }}>
+                      <svg width={TILE} height={TILE} viewBox={`0 0 ${TILE} ${TILE}`}
+                        style={{ position: 'absolute', inset: 0, opacity: 0.35 }}>
+                        <circle cx={TILE * 0.3} cy={TILE * 0.3} r={3} fill={PLAYER_COLORS[ownerCI].ownedDot} />
+                        <circle cx={TILE * 0.7} cy={TILE * 0.6} r={2} fill={PLAYER_COLORS[ownerCI].ownedDot} />
+                        <circle cx={TILE * 0.5} cy={TILE * 0.75} r={2.5} fill={PLAYER_COLORS[ownerCI].ownedDot} />
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* Trail overlay */}
+                  {trailCI !== undefined && ownerCI === undefined && (
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: PLAYER_COLORS[trailCI].trail,
+                      boxShadow: `inset 0 0 8px ${PLAYER_COLORS[trailCI].trailGlow}`,
+                    }}>
+                      <div style={{
+                        position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)',
+                        height: 6, background: `linear-gradient(90deg, transparent, ${PLAYER_COLORS[trailCI].trailLine}, transparent)`, opacity: 0.85,
+                      }} />
+                      <div style={{
+                        position: 'absolute', top: 0, bottom: 0, left: '50%', transform: 'translateX(-50%)',
+                        width: 6, background: `linear-gradient(180deg, transparent, ${PLAYER_COLORS[trailCI].trailLine}, transparent)`, opacity: 0.85,
+                      }} />
+                    </div>
+                  )}
+
+                  {/* Player head */}
+                  {headPlayer && (
+                    <div style={{
+                      position: 'absolute', inset: 4,
+                      background: `linear-gradient(135deg, ${PLAYER_COLORS[headPlayer.colorIndex].headGrad[0]}, ${PLAYER_COLORS[headPlayer.colorIndex].headGrad[1]})`,
+                      borderRadius: 8, border: `2px solid ${PLAYER_COLORS[headPlayer.colorIndex].headBorder}`,
+                      boxShadow: '0 0 14px rgba(255,60,30,0.85), 0 0 4px rgba(255,100,60,0.6)',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        <div style={{ width: 6, height: 6, background: '#fff', borderRadius: '50%', boxShadow: '0 0 2px #000', position: 'relative' }}>
+                          <div style={{ width: 3, height: 3, background: '#222', borderRadius: '50%', position: 'absolute', top: '25%', left: '25%' }} />
+                        </div>
+                        <div style={{ width: 6, height: 6, background: '#fff', borderRadius: '50%', boxShadow: '0 0 2px #000', position: 'relative' }}>
+                          <div style={{ width: 3, height: 3, background: '#222', borderRadius: '50%', position: 'absolute', top: '25%', left: '25%' }} />
+                        </div>
+                      </div>
+                      <div style={{
+                        color: '#fff', fontSize: 7, fontWeight: 'bold', marginTop: 2,
+                        textShadow: '0 0 3px #000', whiteSpace: 'nowrap', overflow: 'hidden',
+                        textOverflow: 'ellipsis', maxWidth: TILE - 12,
+                      }}>
+                        {headPlayer.name}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+        {/* Capture flash */}
+        {flashCapture && (
+          <div style={{
+            position: 'absolute', inset: 0, background: 'rgba(255,80,20,0.18)',
+            pointerEvents: 'none', animation: 'captureFlash 0.3s ease-out forwards',
+          }} />
+        )}
+
+        {/* Death overlay */}
+        {isDead && (
+          <div style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.78)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+          }}>
+            <div style={{ color: '#ff4422', fontSize: 30, fontWeight: 'bold', letterSpacing: 5 }}>WIPED OUT</div>
+            <div style={{ color: '#f0d048', fontSize: 14, letterSpacing: 2 }}>Respawning...</div>
+          </div>
+        )}
+
+        {/* Waiting for data overlay */}
+        {!gameState && (
+          <div style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.78)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+            width: COLS * TILE, height: ROWS * TILE + 4,
+          }}>
+            <div style={{ color: '#f0d048', fontSize: 22, fontWeight: 'bold', letterSpacing: 4 }}>🍄 LAND.IO</div>
+            <div style={{ color: '#aa8833', fontSize: 14 }}>Waiting for game data...</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Footer ─────────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        width: COLS * TILE + 6, marginTop: 8, padding: '6px 14px',
+        background: '#1a1200', border: '2px solid #b8960a', borderRadius: 4, boxSizing: 'border-box',
+      }}>
+        <span style={{ color: '#664400', fontSize: 10, letterSpacing: 2 }}>
+          WASD / ARROWS · CAPTURE TERRITORY · AVOID YOUR TRAIL
+        </span>
+        <button onClick={onLeaveRoom} style={{
+          padding: '6px 16px', background: 'linear-gradient(135deg, #ff4422, #cc2200)',
+          border: '2px solid #ff8866', color: '#fff', borderRadius: 4, cursor: 'pointer',
+          fontFamily: "'Courier New', monospace", fontWeight: 'bold', fontSize: 11, letterSpacing: 2,
+        }}>
+          LEAVE
         </button>
       </div>
+
+      <style>{`
+        @keyframes captureFlash {
+          0% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }

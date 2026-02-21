@@ -1,43 +1,54 @@
 class Player {
-  constructor(id, name) {
+  constructor(id, name, spawnX, spawnY, cols, rows, colorIndex) {
     this.id = id;
     this.name = name;
-    this.x = Math.random() * 800;
-    this.y = Math.random() * 600;
-    this.radius = 15;
-    this.color = this.generateColor();
-    this.vx = 0;
-    this.vy = 0;
-    this.speed = 5;
+    this.x = spawnX;
+    this.y = spawnY;
+    this.dir = { x: 1, y: 0 };
+    this.cols = cols;
+    this.rows = rows;
+    this.colorIndex = colorIndex;
+
+    this.owned = new Set();
+    this.trail = new Set();
     this.score = 0;
-    this.territory = [];
+    this.dead = false;
+    this.kills = 0;
+    this.deaths = 0;
+
+    this._initBase(spawnX, spawnY);
   }
 
-  generateColor() {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'];
-    return colors[Math.floor(Math.random() * colors.length)];
+  _initBase(cx, cy) {
+    this.owned.clear();
+    this.trail.clear();
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x >= 0 && x < this.cols && y >= 0 && y < this.rows) {
+          this.owned.add(`${x},${y}`);
+        }
+      }
+    }
+    this.score = this.owned.size;
   }
 
-  update() {
-    // Update position based on velocity
-    this.x += this.vx;
-    this.y += this.vy;
-
-    // Boundary collision
-    if (this.x - this.radius < 0) this.x = this.radius;
-    if (this.x + this.radius > 800) this.x = 800 - this.radius;
-    if (this.y - this.radius < 0) this.y = this.radius;
-    if (this.y + this.radius > 600) this.y = 600 - this.radius;
+  setDirection(dir) {
+    if (this.dead) return;
+    if (!dir || (dir.x === 0 && dir.y === 0)) return;
+    // Don't allow 180-degree reversal
+    if (dir.x === -this.dir.x && dir.y === -this.dir.y) return;
+    this.dir = { x: dir.x, y: dir.y };
   }
 
-  setDirection(direction) {
-    this.vx = 0;
-    this.vy = 0;
-
-    if (direction.up) this.vy = -this.speed;
-    if (direction.down) this.vy = this.speed;
-    if (direction.left) this.vx = -this.speed;
-    if (direction.right) this.vx = this.speed;
+  respawn(spawnX, spawnY) {
+    this.x = spawnX;
+    this.y = spawnY;
+    this.dir = { x: 1, y: 0 };
+    this.dead = false;
+    this.trail.clear();
+    this._initBase(spawnX, spawnY);
   }
 
   getState() {
@@ -46,9 +57,14 @@ class Player {
       name: this.name,
       x: this.x,
       y: this.y,
-      radius: this.radius,
-      color: this.color,
+      dir: this.dir,
+      owned: Array.from(this.owned),
+      trail: Array.from(this.trail),
       score: this.score,
+      dead: this.dead,
+      kills: this.kills,
+      deaths: this.deaths,
+      colorIndex: this.colorIndex,
     };
   }
 }

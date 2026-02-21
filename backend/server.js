@@ -2,29 +2,33 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import Game from './game/Game.js';
+import RoomManager from './rooms/RoomManager.js';
 import { setupSocketHandlers } from './events/socketHandlers.js';
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: 'http://localhost:5173', // Vite dev server
+    origin: '*', // Allow all origins in development
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
 const PORT = process.env.PORT || 3000;
-const GAME_TICK = 1000 / 60; // 60 FPS
+const GAME_TICK = 120; // Movement tick ~8 FPS (like Paper.io)
 
-// Initialize game
-const game = new Game();
+// Initialize room manager
+const roomManager = new RoomManager();
 
 // Setup socket handlers
-setupSocketHandlers(io, game);
+setupSocketHandlers(io, roomManager);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  credentials: true,
+}));
 app.use(express.json());
 
 // Routes
@@ -32,13 +36,24 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'Server is running' });
 });
 
-// Game loop
-game.start();
+app.get('/api/rooms', (req, res) => {
+  const rooms = roomManager.getRoomsInfo();
+  res.json({ rooms });
+});
+
+// Game loop - move players and broadcast state each tick
 setInterval(() => {
-  if (game.gameRunning) {
-    game.updateGame();
-    // Broadcast game state to all connected clients
-    io.emit('game:update', game.getGameState());
+  for (const [roomCode, room] of roomManager.rooms) {
+    if (room.players.size === 0) continue;
+
+    room.game.updateGame();
+    const gameState = room.game.getGameState();
+
+    io.to(roomCode).emit('game:update', {
+      roomCode,
+      gameState,
+      playerCount: room.players.size,
+    });
   }
 }, GAME_TICK);
 

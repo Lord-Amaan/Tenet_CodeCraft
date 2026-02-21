@@ -1,33 +1,125 @@
-export function setupSocketHandlers(io, game) {
+export function setupSocketHandlers(io, roomManager) {
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
+    let currentRoom = null;
 
-    // Player joins game
-    socket.on('player:join', (playerName) => {
-      const player = game.addPlayer(socket.id, playerName);
+    // Create a new room
+    socket.on('room:create', (callback) => {
+      const roomCode = roomManager.createRoom();
+      if (typeof callback === 'function') {
+        callback({ roomCode });
+      }
+    });
+
+    // Get list of available rooms
+    socket.on('room:list', (callback) => {
+      const rooms = roomManager.getRoomsInfo();
+      if (typeof callback === 'function') {
+        callback({ rooms });
+      }
+    });
+
+    // Join a room
+    socket.on('room:join', (roomCode, playerName, callback) => {
+      const result = roomManager.joinRoom(roomCode, socket.id, playerName);
       
-      // Notify all clients
-      io.emit('player:joined', {
-        player: player.getState(),
-        totalPlayers: game.players.size,
+      if (!result) {
+        if (typeof callback === 'function') {
+          callback({ success: false, error: 'Room not found' });
+        }
+        return;
+      }
+
+      currentRoom = roomCode;
+      socket.join(roomCode);
+
+      const room = roomManager.getRoom(roomCode);
+      const roomState = roomManager.getRoomState(roomCode);
+
+      // Notify all players in the room
+      io.to(roomCode).emit('room:playerJoined', {
+        player: result.player.getState(),
+        playerCount: room.players.size,
+        gameState: roomState.gameState,
       });
 
-      // Send current game state to new player
-      socket.emit('game:state', game.getGameState());
+      if (typeof callback === 'function') {
+        callback({ 
+          success: true, 
+          roomCode, 
+          playerId: socket.id,
+          gameState: roomState.gameState 
+        });
+      }
     });
 
-    // Player movement
+    // Player direction change (auto-movement is server-side)
     socket.on('player:move', (direction) => {
-      game.updatePlayer(socket.id, direction);
+      if (!currentRoom) return;
+
+      const room = roomManager.getRoom(currentRoom);
+      if (!room) return;
+
+      const player = room.game.getPlayer(socket.id);
+      if (player) {
+        player.setDirection(direction);
+      }
     });
 
-    // Player disconnects
+    // Get leaderboard for the room
+    socket.on('leaderboard:get', (callback) => {
+      if (!currentRoom) {
+        if (typeof callback === 'function') {
+          callback({ leaderboard: [] });
+        }
+        return;
+      }
+
+      const leaderboard = roomManager.getRoomLeaderboard(currentRoom);
+      if (typeof callback === 'function') {
+        callback({ leaderboard });
+      }
+    });
+
+    // Get global leaderboard
+    socket.on('leaderboard:global', (callback) => {
+      const leaderboard = roomManager.getLeaderboard();
+      if (typeof callback === 'function') {
+        callback({ leaderboard });
+      }
+    });
+
+    // Leave room
+    socket.on('room:leave', () => {
+      if (!currentRoom) return;
+
+      roomManager.leaveRoom(currentRoom, socket.id);
+      socket.leave(currentRoom);
+      
+      const room = roomManager.getRoom(currentRoom);
+      if (room) {
+        io.to(currentRoom).emit('room:playerLeft', {
+          playerId: socket.id,
+          playerCount: room.players.size,
+        });
+      }
+
+      currentRoom = null;
+    });
+
+    // Disconnect
     socket.on('disconnect', () => {
-      game.removePlayer(socket.id);
-      io.emit('player:left', {
-        playerId: socket.id,
-        totalPlayers: game.players.size,
-      });
+      if (currentRoom) {
+        roomManager.leaveRoom(currentRoom, socket.id);
+        const room = roomManager.getRoom(currentRoom);
+        if (room) {
+          io.to(currentRoom).emit('room:playerLeft', {
+            playerId: socket.id,
+            playerCount: room.players.size,
+          });
+        }
+      }
+
       console.log(`User disconnected: ${socket.id}`);
     });
 
@@ -37,3 +129,4 @@ export function setupSocketHandlers(io, game) {
     });
   });
 }
+
