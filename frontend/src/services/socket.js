@@ -9,6 +9,12 @@ class SocketService {
   connect(serverUrl = 'http://localhost:3000') {
     return new Promise((resolve, reject) => {
       try {
+        // If already connected, resolve immediately
+        if (this.isConnected && this.socket) {
+          resolve();
+          return;
+        }
+
         this.socket = io(serverUrl);
 
         this.socket.on('connect', () => {
@@ -32,9 +38,9 @@ class SocketService {
     });
   }
 
-  emit(event, data) {
+  emit(event, ...args) {
     if (this.socket) {
-      this.socket.emit(event, data);
+      this.socket.emit(event, ...args);
     }
   }
 
