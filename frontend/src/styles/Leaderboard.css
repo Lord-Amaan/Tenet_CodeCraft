@@ -4,7 +4,7 @@
 
 .lb-overlay {
   position: absolute;
-  top: 80px;
+  top: 60px;
   left: 14px;
   z-index: 20;
   display: flex;

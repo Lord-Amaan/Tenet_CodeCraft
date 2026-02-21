@@ -848,6 +848,9 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [gameState, setGameState] = useState(null);
+  const [roundResults, setRoundResults] = useState(null);
+  const [roundCountdown, setRoundCountdown] = useState(0);
+  const roundCountdownRef = useRef(null);
   const [flashCapture, setFlashCapture] = useState(false);
   const [viewportSize, setViewportSize] = useState({ w: 800, h: 600 });
   const viewportRef = useRef(null);
@@ -1006,11 +1009,44 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
       }
     };
 
+    const handleRoundEnd = (data) => {
+      setRoundResults(data.results);
+      // Start countdown timer
+      const total = data.restartIn || 9;
+      setRoundCountdown(total);
+      // Clear any existing interval
+      if (roundCountdownRef.current) clearInterval(roundCountdownRef.current);
+      let remaining = total;
+      roundCountdownRef.current = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+          clearInterval(roundCountdownRef.current);
+          roundCountdownRef.current = null;
+          setRoundCountdown(0);
+        } else {
+          setRoundCountdown(remaining);
+        }
+      }, 1000);
+    };
+    const handleRoundReset = () => {
+      setRoundResults(null);
+      setRoundCountdown(0);
+      if (roundCountdownRef.current) {
+        clearInterval(roundCountdownRef.current);
+        roundCountdownRef.current = null;
+      }
+    };
+
     socketService.on('game:update', handleGameUpdate);
     socketService.on('room:playerJoined', handlePlayerJoined);
+    socketService.on('game:roundEnd', handleRoundEnd);
+    socketService.on('game:roundReset', handleRoundReset);
     return () => {
       socketService.off('game:update', handleGameUpdate);
       socketService.off('room:playerJoined', handlePlayerJoined);
+      socketService.off('game:roundEnd', handleRoundEnd);
+      socketService.off('game:roundReset', handleRoundReset);
+      if (roundCountdownRef.current) clearInterval(roundCountdownRef.current);
     };
   }, []);
 
@@ -1514,6 +1550,13 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   const kills = localPlayer?.kills || 0;
   const deaths = localPlayer?.deaths || 0;
 
+  // Round timer
+  const timeLeftMs = gameState?.timeLeft ?? 0;
+  const timeMin = Math.floor(timeLeftMs / 60000);
+  const timeSec = Math.floor((timeLeftMs % 60000) / 1000);
+  const timeStr = `${timeMin}:${timeSec.toString().padStart(2, '0')}`;
+  const timeUrgent = timeLeftMs < 30000 && timeLeftMs > 0;
+
   const vpW = viewportSize.w;
   const vpH = viewportSize.h;
 
@@ -1544,6 +1587,16 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
           </div>
         </div>
         <div className="gc-hud-right">
+          <span className="gc-timer" style={{
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 18,
+            fontWeight: 700,
+            letterSpacing: 2,
+            color: timeUrgent ? '#ff4444' : 'rgba(212,180,80,0.9)',
+            textShadow: timeUrgent ? '0 0 12px rgba(255,50,50,0.8)' : '0 0 10px rgba(212,180,80,0.5)',
+            marginRight: 10,
+            animation: timeUrgent ? 'timerPulse 1s ease-in-out infinite' : 'none',
+          }}>&#x23F1; {timeStr}</span>
           <span className="gc-score" key={score}>{score}</span>
         </div>
       </div>
@@ -1560,6 +1613,92 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
       </div>
 
       {/* ── Bottom bar ──────────────────────────────────────────────────── */}
+
+      {/* ── Round End Overlay ────────────────────────────────────────────── */}
+      {roundResults && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 50,
+          background: 'rgba(4,6,4,0.92)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(8px)',
+        }}>
+          <div style={{
+            fontFamily: "'Cinzel Decorative', serif", fontWeight: 900,
+            fontSize: 'clamp(24px,6vw,40px)', color: '#f0d060',
+            textShadow: '0 0 28px rgba(240,208,96,0.8)', letterSpacing: 3,
+            marginBottom: 6,
+          }}>Round Over</div>
+          <div style={{
+            fontFamily: "'Rajdhani', sans-serif", fontSize: 11,
+            color: 'rgba(212,180,80,0.6)', letterSpacing: 4, textTransform: 'uppercase',
+            marginBottom: 24, fontWeight: 600,
+          }}>Final Standings</div>
+          <div style={{ width: '90%', maxWidth: 420 }}>
+            {roundResults.map((r, i) => {
+              const rpc = PLAYER_COLORS[r.colorIndex] || PLAYER_COLORS[0];
+              const isMe = r.id === playerId;
+              return (
+                <div key={r.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 16px', marginBottom: 6,
+                  background: isMe ? 'rgba(212,180,80,0.12)' : 'rgba(255,255,255,0.03)',
+                  border: isMe ? '1.5px solid rgba(212,180,80,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: 10,
+                }}>
+                  <span style={{
+                    fontFamily: "'Cinzel', serif", fontSize: 22, fontWeight: 900,
+                    color: i === 0 ? '#f0d060' : 'rgba(255,255,255,0.35)',
+                    textShadow: i === 0 ? '0 0 16px rgba(240,208,96,0.6)' : 'none',
+                    width: 32, textAlign: 'center',
+                  }}>{i === 0 ? '\u{1F451}' : `#${i + 1}`}</span>
+                  <div style={{
+                    width: 10, height: 10, borderRadius: '50%',
+                    background: rpc.owned, boxShadow: `0 0 8px ${rpc.owned}`,
+                    flexShrink: 0,
+                  }} />
+                  <span style={{
+                    flex: 1, fontFamily: "'Rajdhani', sans-serif", fontSize: 15,
+                    fontWeight: 700, color: isMe ? '#f0d060' : 'rgba(255,255,255,0.7)',
+                    letterSpacing: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{r.name}{isMe ? ' (You)' : ''}</span>
+                  <span style={{
+                    fontFamily: "'Rajdhani', sans-serif", fontSize: 12, fontWeight: 600,
+                    color: 'rgba(212,180,80,0.7)', letterSpacing: 1,
+                  }}>{r.territory}%</span>
+                  <span style={{
+                    fontFamily: "'Rajdhani', sans-serif", fontSize: 12, fontWeight: 600,
+                    color: 'rgba(255,255,255,0.4)', letterSpacing: 1,
+                  }}>&#x2694;{r.kills} &#x1F480;{r.deaths}</span>
+                  <span style={{
+                    fontFamily: "'Cinzel', serif", fontSize: 16, fontWeight: 900,
+                    color: '#f0d060', textShadow: '0 0 10px rgba(240,208,96,0.4)',
+                    minWidth: 48, textAlign: 'right',
+                  }}>{r.score}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{
+            marginTop: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+          }}>
+            <div style={{
+              fontFamily: "'Cinzel Decorative', serif", fontWeight: 900,
+              fontSize: 'clamp(36px,8vw,56px)', color: roundCountdown <= 3 ? '#ff4444' : '#f0d060',
+              textShadow: roundCountdown <= 3
+                ? '0 0 30px rgba(255,50,50,0.9), 0 0 60px rgba(255,50,50,0.4)'
+                : '0 0 28px rgba(240,208,96,0.8), 0 0 56px rgba(240,208,96,0.3)',
+              letterSpacing: 4,
+              animation: roundCountdown <= 3 ? 'timerPulse 0.6s ease-in-out infinite' : 'none',
+              transition: 'color 0.3s, text-shadow 0.3s',
+            }}>{roundCountdown > 0 ? roundCountdown : '0'}</div>
+            <div style={{
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 12, color: 'rgba(212,180,80,0.55)',
+              letterSpacing: 3, textTransform: 'uppercase', fontWeight: 600,
+            }}>New round starting{roundCountdown > 0 ? ` in ${roundCountdown}s` : '…'}</div>
+          </div>
+        </div>
+      )}
      
     </div>
   );

@@ -10,6 +10,11 @@ class Game {
     this.moveInterval = 150; // ms between moves (controls player speed)
     this.lastMoveTime = 0;
 
+    // Round timer — 3 minutes
+    this.ROUND_DURATION = 3 * 60 * 1000; // 3 minutes in ms
+    this.roundStartTime = null; // set when first player joins
+    this.roundEnded = false;
+
     this.spawnPositions = [
       { x: 10, y: 10 },
       { x: 75, y: 50 },
@@ -48,6 +53,13 @@ class Game {
     const colorIndex = this._getAvailableColor(preferredColorIndex);
     const player = new Player(socketId, playerName, spawn.x, spawn.y, this.cols, this.rows, colorIndex);
     this.players.set(socketId, player);
+
+    // Start round timer when first player joins
+    if (!this.roundStartTime) {
+      this.roundStartTime = Date.now();
+      this.roundEnded = false;
+    }
+
     console.log(`Player ${playerName} joined with color ${colorIndex}. Total: ${this.players.size}`);
     return player;
   }
@@ -253,11 +265,55 @@ class Game {
     return enclosed;
   }
 
+  /** Time remaining in current round (ms). Returns 0 if round hasn't started. */
+  getTimeLeft() {
+    if (!this.roundStartTime) return this.ROUND_DURATION;
+    const elapsed = Date.now() - this.roundStartTime;
+    return Math.max(0, this.ROUND_DURATION - elapsed);
+  }
+
+  /** Check if current round is over */
+  isRoundOver() {
+    return this.roundStartTime !== null && this.getTimeLeft() <= 0;
+  }
+
+  /** Get final standings sorted by score desc */
+  getRoundResults() {
+    return Array.from(this.players.values())
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        score: p.score,
+        kills: p.kills,
+        deaths: p.deaths,
+        colorIndex: p.colorIndex,
+        territory: Math.round((p.owned.size / (this.cols * this.rows)) * 100),
+      }))
+      .sort((a, b) => b.score - a.score);
+  }
+
+  /** Reset the game for a new round — clears all territory, trails, scores, respawns everyone */
+  resetRound() {
+    for (const player of this.players.values()) {
+      player.owned.clear();
+      player.trail.clear();
+      player.score = 0;
+      player.kills = 0;
+      player.deaths = 0;
+      player.dead = false;
+      const spawn = this._getSpawnPosition();
+      player.respawn(spawn.x, spawn.y);
+    }
+    this.roundStartTime = this.players.size > 0 ? Date.now() : null;
+    this.roundEnded = false;
+  }
+
   getGameState() {
     return {
       players: Array.from(this.players.values()).map(p => p.getState()),
       cols: this.cols,
       rows: this.rows,
+      timeLeft: this.getTimeLeft(),
     };
   }
 }

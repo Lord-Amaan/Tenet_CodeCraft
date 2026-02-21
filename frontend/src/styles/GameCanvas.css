@@ -44,12 +44,18 @@
   align-items: center;
 }
 .gc-logo {
+  font-family: 'Cinzel Decorative', serif;
   font-weight: 900;
   font-size: 16px;
-  color: #f0d048;
   letter-spacing: 2px;
-  text-shadow: 0 0 12px rgba(240,208,72,0.3);
   white-space: nowrap;
+  background-image: linear-gradient(170deg, #fff8d8 0%, #ffe080 18%, #d4a828 40%, #f5d040 58%, #b07818 78%, #7a5218 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 28px rgba(212,180,80,0.95)) drop-shadow(0 0 55px rgba(190,130,10,0.5));
+  animation: shimmer 6s linear infinite;
 }
 
 .gc-hud-center {
@@ -120,6 +126,9 @@
   text-align: right;
   min-width: 40px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 .gc-score {
   font-size: 20px;
@@ -132,6 +141,10 @@
 @keyframes scorePop {
   0% { transform: scale(1.15); }
   100% { transform: scale(1); }
+}
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.08); }
 }
 
 /* ═══ Canvas Viewport — fills all remaining space ══════════════════════════ */

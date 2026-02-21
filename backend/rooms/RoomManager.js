@@ -16,7 +16,7 @@ class RoomManager {
     return code;
   }
 
-  createRoom() {
+  createRoom(options = {}) {
     let roomCode;
     do {
       roomCode = this.generateRoomCode();
@@ -28,10 +28,11 @@ class RoomManager {
       players: new Map(),
       createdAt: Date.now(),
       cleanupTimer: null,
+      isPrivate: !!options.isPrivate,
     };
 
     this.rooms.set(roomCode, room);
-    console.log(`Room created: ${roomCode}`);
+    console.log(`Room created: ${roomCode} (${room.isPrivate ? 'private' : 'public'})`);
     return roomCode;
   }
 
@@ -94,6 +95,7 @@ class RoomManager {
   getRoomsInfo() {
     const rooms = [];
     for (const [code, room] of this.rooms) {
+      if (room.isPrivate) continue; // Skip private rooms
       rooms.push({
         code,
         playerCount: room.players.size,

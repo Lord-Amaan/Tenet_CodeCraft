@@ -173,6 +173,7 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
   const [glitch, setGlitch]             = useState(false);
   const [particles, setParticles]       = useState([]);
   const [joinedRoom, setJoinedRoom]     = useState(null);
+  const [isPrivate, setIsPrivate]       = useState(false);
 
   // Stats / auth views
   const [view, setView]                 = useState('main'); // 'main' | 'stats'
@@ -327,7 +328,7 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
   const handleCreateRoom = () => {
     if (!playerName.trim()) { setError('Enter your name to play'); return; }
     setLoading(true); setError('');
-    socketService.emit('room:create', (data) => {
+    socketService.emit('room:create', { isPrivate }, (data) => {
       if (!data || !data.roomCode) { setError('Failed to create room'); setLoading(false); return; }
       socketService.emit('room:join', data.roomCode, playerName, selectedElement, (joinData) => {
         if (joinData && joinData.success) {
@@ -656,12 +657,12 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
               <div style={{flex:1,height:1,background:"linear-gradient(90deg,rgba(212,180,80,0.7),transparent)"}}/>
             </div>
 
-            <div className="gol-hero-subtitle" style={{
+            {/* <div className="gol-hero-subtitle" style={{
               fontSize:8,letterSpacing:3,color:"rgba(212,180,80,0.72)",
               textTransform:"uppercase",fontFamily:"'Rajdhani',sans-serif",fontWeight:500,
               textShadow:"0 0 14px rgba(212,180,80,0.38)",
               animation:"fadeUp 0.7s ease 1.05s both",
-            }}>Claim Every Land. Leave No Enemy Standing.</div>
+            }}>Claim Every Land. Leave No Enemy Standing.</div> */}
           </div>
 
           {/* ═══ MAIN CARD ═══ */}
@@ -881,11 +882,40 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
                     textAlign:"center",lineHeight:2.2,textTransform:"uppercase",
                     textShadow:"0 0 10px rgba(212,180,80,0.3)",
                   }}>Raise your banner &amp; summon<br/>allies to your cause.</div>
+
+                  {/* Private / Public toggle */}
+                  <div style={{display:"flex",alignItems:"center",gap:0,
+                    background:"rgba(212,180,80,0.05)",borderRadius:8,
+                    border:"1.5px solid rgba(212,180,80,0.18)",overflow:"hidden"}}>
+                    <button onClick={()=>setIsPrivate(false)} style={{
+                      padding:"9px 18px",border:"none",cursor:"pointer",
+                      fontFamily:"'Rajdhani',sans-serif",fontSize:11,fontWeight:700,
+                      letterSpacing:2,textTransform:"uppercase",
+                      background:!isPrivate?"rgba(90,186,80,0.18)":"transparent",
+                      color:!isPrivate?"#5aba50":"rgba(212,180,80,0.4)",
+                      borderRight:"1px solid rgba(212,180,80,0.12)",
+                      textShadow:!isPrivate?"0 0 10px rgba(90,186,80,0.5)":"none",
+                      transition:"all 0.2s",
+                    }}>🌍 Public</button>
+                    <button onClick={()=>setIsPrivate(true)} style={{
+                      padding:"9px 18px",border:"none",cursor:"pointer",
+                      fontFamily:"'Rajdhani',sans-serif",fontSize:11,fontWeight:700,
+                      letterSpacing:2,textTransform:"uppercase",
+                      background:isPrivate?"rgba(232,64,64,0.12)":"transparent",
+                      color:isPrivate?"#ff6b6b":"rgba(212,180,80,0.4)",
+                      textShadow:isPrivate?"0 0 10px rgba(232,64,64,0.4)":"none",
+                      transition:"all 0.2s",
+                    }}>🔒 Private</button>
+                  </div>
+
                   <div style={{
                     fontSize:10,fontFamily:"'Rajdhani',sans-serif",
                     color:"rgba(212,180,80,0.4)",letterSpacing:2,textAlign:"center",
-                  }}>Share your room code to unite your forces</div>
-                  <button className="create-btn-gol" onClick={handleCreateRoom} disabled={loading} style={{
+                  }}>{isPrivate
+                    ? "Only players with the room code can join"
+                    : "Room will be listed in Browse for anyone to join"
+                  }</div>
+                  {/* <button className="create-btn-gol" onClick={handleCreateRoom} disabled={loading} style={{
                     padding:"13px 44px",fontFamily:"'Cinzel',serif",fontSize:13,
                     letterSpacing:5,color:"#f0d060",textTransform:"uppercase",
                     background:"linear-gradient(135deg,rgba(212,180,80,0.15),rgba(212,180,80,0.07))",
@@ -893,7 +923,7 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
                     boxShadow:"0 0 30px rgba(212,180,80,0.18)",fontWeight:600,
                     textShadow:"0 0 14px rgba(240,208,96,0.6)",
                     opacity:loading?0.5:1,cursor:loading?"not-allowed":"pointer",
-                  }}>{loading?"Creating...":"⚑   Raise Banner"}</button>
+                  }}>{loading?"Creating...":"⚑   Raise Banner"}</button> */}
                 </div>
               )}
 
@@ -976,14 +1006,14 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
         overflow:"hidden",
         flexWrap:"wrap",
       }}>
-        <span style={{
+        {/* <span style={{
           display:"inline-block",width:6,height:6,borderRadius:"50%",
           background:selEl.color,boxShadow:`0 0 8px ${selEl.glow}`,
           animation:"trailPulse 2s ease-in-out infinite",flexShrink:0,
-        }}/>
-        <span style={{whiteSpace:"nowrap"}}>
+        }}/> */}
+        {/* <span style={{whiteSpace:"nowrap"}}>
           WASD / Arrows · Capture territory · Defeat enemy trails · Dominate the realm
-        </span>
+        </span> */}
       </div>
     </>
   );
