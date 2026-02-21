@@ -1,0 +1,133 @@
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* ── Leaderboard — Transparent Left Overlay ───────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+.lb-overlay {
+  position: absolute;
+  top: 80px;
+  left: 14px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ── Entry row ──────────────────────────────────────────────────────────── */
+.lb-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 10px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: auto;
+  animation: lbSlideIn 0.4s ease-out backwards;
+  transition: background 0.25s, transform 0.2s;
+  min-width: 180px;
+}
+
+.lb-entry:hover {
+  background: rgba(0, 0, 0, 0.5);
+  transform: translateX(4px);
+}
+
+.lb-entry-first {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.1);
+  padding: 9px 16px 9px 12px;
+}
+
+@keyframes lbSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ── Rank badge ─────────────────────────────────────────────────────────── */
+.lb-entry-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #fff;
+  background: var(--entry-color, rgba(255,255,255,0.15));
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--entry-color) 40%, transparent);
+}
+
+/* ── Emoji ──────────────────────────────────────────────────────────────── */
+.lb-entry-emoji {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.lb-entry-first .lb-entry-emoji {
+  font-size: 22px;
+}
+
+/* ── Player name ────────────────────────────────────────────────────────── */
+.lb-entry-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.lb-entry-first .lb-entry-name {
+  font-size: 14px;
+  color: #fff;
+}
+
+/* ── Territory percentage ───────────────────────────────────────────────── */
+.lb-entry-pct {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.lb-entry-first .lb-entry-pct {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .lb-overlay {
+    top: 60px;
+    left: 8px;
+  }
+  .lb-entry {
+    min-width: 140px;
+    padding: 5px 10px 5px 8px;
+    gap: 6px;
+  }
+  .lb-entry-name {
+    font-size: 11px;
+  }
+  .lb-entry-pct {
+    font-size: 11px;
+  }
+}
