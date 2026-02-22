@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { socketService } from '../services/socket';
 import { audioEngine } from '../services/audioEngine';
+import { rewardCoins, coinEvent, getWallet } from '../services/api';
 import '../styles/GameCanvas.css';
 
 const TILE = 32;
@@ -845,7 +846,7 @@ class ParticlePool {
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
-export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStatsUpdate }) {
+export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStatsUpdate, getToken, isSignedIn }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [gameState, setGameState] = useState(null);
@@ -858,6 +859,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showInstructions, setShowInstructions] = useState(false);
   const [instrSlideIndex, setInstrSlideIndex] = useState(0);
+  const [coinReward, setCoinReward] = useState(null);
   const viewportRef = useRef(null);
 
   // Auto-advance instruction slides
@@ -901,10 +903,22 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   const wasDeadRef = useRef(false);
   const soundEnabledRef = useRef(true);
 
+  // ── Coin tracking ───────────────────────────────────────────────────
+  const coinsRef = useRef(0);  // latest DB coins
+  const prevKillsForCoinsRef = useRef(0);
+  const prevDeathsForCoinsRef = useRef(0);
+
   // ── Audio init: load eagerly on mount, resume context on first gesture ──
   useEffect(() => {
     // Start loading all audio files immediately (fetch + decode don't need gesture)
     audioEngine.loadAll();
+
+    // Fetch initial coin balance
+    if (isSignedIn && getToken) {
+      getWallet(getToken).then(data => {
+        if (data && data.success) coinsRef.current = data.coins ?? 0;
+      }).catch(() => {});
+    }
 
     // AudioContext.resume() and HTMLAudioElement.play() need a user gesture
     const resumeOnGesture = () => {
@@ -1042,8 +1056,28 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
           // Eliminated sound — local player just died
           if (local.dead && !wasDeadRef.current) {
             audioEngine.play('eliminated', 0.6);
+            // Coin event: death
+            if (isSignedIn && getToken) {
+              coinEvent(getToken, 'death').then(r => {
+                if (r && r.success) coinsRef.current = r.coins;
+              }).catch(() => {});
+            }
           }
           wasDeadRef.current = !!local.dead;
+
+          // Detect new kills for coin events
+          if (local.kills > prevKillsForCoinsRef.current) {
+            const newKills = local.kills - prevKillsForCoinsRef.current;
+            if (isSignedIn && getToken) {
+              for (let i = 0; i < newKills; i++) {
+                coinEvent(getToken, 'kill').then(r => {
+                  if (r && r.success) coinsRef.current = r.coins;
+                }).catch(() => {});
+              }
+            }
+          }
+          prevKillsForCoinsRef.current = local.kills;
+          prevDeathsForCoinsRef.current = local.deaths;
 
           if (local.dead && !deathAnimRef.current.active) {
             deathAnimRef.current = { active: true, progress: 0 };
@@ -1055,6 +1089,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
               kills: local.kills,
               deaths: local.deaths,
               score: local.score,
+              coins: coinsRef.current,
               playerCount: data.playerCount,
               minimapData: {
                 cols: gs.cols || 90,
@@ -1083,12 +1118,32 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
 
     const handleRoundEnd = (data) => {
       setRoundResults(data.results);
+      setCoinReward(null);
       // Stop BGM on round end
       audioEngine.stopBGM();
       bgmStartedRef.current = false;
       // Reset tracking refs
       prevKillsRef.current = 0;
       wasDeadRef.current = false;
+      prevKillsForCoinsRef.current = 0;
+      prevDeathsForCoinsRef.current = 0;
+
+      // ── Reward coins (winner bonus) ──
+      if (isSignedIn && getToken && data.results) {
+        const isWinner = data.results[0]?.id === playerId;
+        if (isWinner) {
+          coinEvent(getToken, 'win').then(res => {
+            if (res && res.success) {
+              coinsRef.current = res.coins;
+              setCoinReward({ delta: 10, total: res.coins });
+            }
+          }).catch(() => {});
+        } else {
+          // Just show the current balance
+          setCoinReward({ delta: 0, total: coinsRef.current });
+        }
+      }
+
       // Start countdown timer
       const total = data.restartIn || 9;
       setRoundCountdown(total);
@@ -1121,6 +1176,8 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
       // Reset tracking refs
       prevKillsRef.current = 0;
       wasDeadRef.current = false;
+      prevKillsForCoinsRef.current = 0;
+      prevDeathsForCoinsRef.current = 0;
     };
 
     socketService.on('game:update', handleGameUpdate);
@@ -2251,6 +2308,25 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
               fontSize: 12, color: 'rgba(212,180,80,0.55)',
               letterSpacing: 3, textTransform: 'uppercase', fontWeight: 600,
             }}>New round starting{roundCountdown > 0 ? ` in ${roundCountdown}s` : '…'}</div>
+            {coinReward && (
+              <div style={{
+                marginTop: 8, padding: '8px 20px', borderRadius: 20,
+                background: coinReward.delta >= 0 ? 'rgba(255,215,0,0.12)' : 'rgba(232,64,64,0.1)',
+                border: `1px solid ${coinReward.delta >= 0 ? 'rgba(255,215,0,0.35)' : 'rgba(232,64,64,0.3)'}`,
+                fontFamily: "'Cinzel', serif", fontSize: 16, fontWeight: 900,
+                color: coinReward.delta >= 0 ? '#ffd700' : '#ff6b6b',
+                textShadow: coinReward.delta >= 0
+                  ? '0 0 14px rgba(255,215,0,0.6)'
+                  : '0 0 14px rgba(232,64,64,0.5)',
+                letterSpacing: 2,
+              }}>
+                {coinReward.delta >= 0 ? '+' : ''}{coinReward.delta} 🪙
+                <span style={{
+                  marginLeft: 12, fontSize: 11, color: 'rgba(255,255,255,0.4)',
+                  fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, letterSpacing: 1,
+                }}>Total: {coinReward.total}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

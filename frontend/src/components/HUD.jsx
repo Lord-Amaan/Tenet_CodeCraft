@@ -18,7 +18,7 @@ const MINIMAP_COLORS = [
   { owned: '#40c8c8', trail: '#60e8e8' },
 ];
 
-export function HUD({ playerName, kills, deaths, score, playerCount, roomCode, onLeaveRoom, playerId, minimapData }) {
+export function HUD({ playerName, kills, deaths, score, coins, playerCount, roomCode, onLeaveRoom, playerId, minimapData }) {
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
   };
@@ -123,7 +123,21 @@ export function HUD({ playerName, kills, deaths, score, playerCount, roomCode, o
           <span className="hud-card-icon">&#x1F3AE;</span>
           <span className="hud-card-title">PLAYER</span>
         </div>
-        <div className="hud-player-name">{playerName}</div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <div className="hud-player-name" style={{marginBottom:0}}>{playerName}</div>
+          <div style={{
+            display:'flex',alignItems:'center',gap:5,
+            padding:'3px 10px',borderRadius:14,
+            background:'rgba(255,215,0,0.08)',
+            border:'1px solid rgba(255,215,0,0.18)',
+          }}>
+            <span style={{fontSize:12}}>🪙</span>
+            <span style={{
+              fontFamily:"'Cinzel',serif",fontSize:14,fontWeight:700,
+              color:'#ffd700',textShadow:'0 0 10px rgba(255,215,0,0.5)',
+            }}>{coins ?? 0}</span>
+          </div>
+        </div>
         <div className="hud-stats-row">
           <div className="hud-stat-box">
             <span className="hud-stat-label">SCORE</span>

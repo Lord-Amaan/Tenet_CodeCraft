@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { socketService } from '../services/socket';
-import { getMyStats } from '../services/api';
+import { getMyStats, getWallet } from '../services/api';
 import { getGuestSummary } from '../services/guestStats';
+import { Shop } from './Shop';
 
 /* ── Load Google Fonts once ─────────────────────────────────────────── */
 if (typeof document !== "undefined" && !document.getElementById("gol-fonts")) {
@@ -180,6 +181,12 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
   const [stats, setStats]               = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
+  // Wallet / shop
+  const [coins, setCoins]               = useState(0);
+  const [unlockedSkins, setUnlockedSkins] = useState(['lava','ocean','fungi','earth']);
+  const [showShop, setShowShop]         = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
   const selEl = ELEMENTS.find(e => e.colorIndex === selectedElement);
 
   // ── Auto-fill name from Clerk user ──────────────────────────────
@@ -188,6 +195,22 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
       setPlayerName(user.fullName || user.username || user.firstName || '');
     }
   }, [isSignedIn, user]);
+
+  // ── Fetch wallet when signed in ────────────────────────────────
+  useEffect(() => {
+    if (!isSignedIn || !getToken) return;
+    getWallet(getToken).then(data => {
+      if (data && data.success) {
+        setCoins(data.coins ?? 0);
+        setUnlockedSkins(data.unlockedSkins || ['lava','ocean','fungi','earth']);
+      }
+    }).catch(() => {});
+  }, [isSignedIn, getToken]);
+
+  const handleWalletUpdate = (newCoins, newSkins) => {
+    if (newCoins !== undefined) setCoins(newCoins);
+    if (newSkins) setUnlockedSkins(newSkins);
+  };
 
   // ── Load rooms via socket ──────────────────────────────────────
   useEffect(() => {
@@ -401,6 +424,96 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
         animation:"runeRotate 20s linear infinite reverse",color:"#d4b450",
         filter:"drop-shadow(0 0 10px #d4b450)"}}>🛡</div>
 
+      {/* ── Coin display + Shop button (top-right) ── */}
+      <div style={{
+        position:"fixed",top:52,right:14,zIndex:12,
+        display:"flex",alignItems:"center",gap:8,
+      }}>
+        <div style={{
+          display:"flex",alignItems:"center",gap:6,
+          padding:"6px 14px",borderRadius:20,
+          background:"rgba(255,215,0,0.08)",
+          border:"1px solid rgba(255,215,0,0.2)",
+          backdropFilter:"blur(12px)",
+        }}>
+          <span style={{fontSize:14}}>🪙</span>
+          <span style={{
+            fontFamily:"'Cinzel',serif",fontSize:14,fontWeight:900,
+            color:"#ffd700",textShadow:"0 0 10px rgba(255,215,0,0.5)",
+          }}>{coins}</span>
+        </div>
+        <button className="auth-bar-btn" onClick={()=>{
+          if (isSignedIn) setShowShop(true);
+          else setShowLoginPrompt(true);
+        }} style={{
+          padding:"6px 14px",borderRadius:20,
+          background:"rgba(212,180,80,0.08)",
+          border:"1px solid rgba(212,180,80,0.25)",
+          fontFamily:"'Rajdhani',sans-serif",fontSize:11,fontWeight:700,
+          color:"#f0d060",letterSpacing:2,textTransform:"uppercase",
+          backdropFilter:"blur(12px)",
+        }}>🏪 Shop</button>
+      </div>
+
+      {/* ── Shop overlay ── */}
+      {showShop && isSignedIn && (
+        <Shop
+          getToken={getToken}
+          coins={coins}
+          unlockedSkins={unlockedSkins}
+          onClose={()=>setShowShop(false)}
+          onWalletUpdate={handleWalletUpdate}
+        />
+      )}
+
+      {/* ── Login prompt overlay ── */}
+      {showLoginPrompt && (
+        <div style={{
+          position:'fixed',inset:0,zIndex:110,
+          background:'rgba(4,6,4,0.92)',backdropFilter:'blur(12px)',
+          display:'flex',alignItems:'center',justifyContent:'center',
+        }}>
+          <div style={{
+            width:'92%',maxWidth:380,padding:'28px 24px',
+            background:'linear-gradient(160deg,rgba(16,14,8,0.98),rgba(9,11,7,0.99))',
+            border:'1.5px solid rgba(212,180,80,0.28)',borderRadius:14,
+            boxShadow:'0 0 80px rgba(212,180,80,0.1),0 30px 90px rgba(0,0,0,0.9)',
+            textAlign:'center',
+          }}>
+            <div style={{fontSize:42,marginBottom:12,filter:'drop-shadow(0 0 18px rgba(212,180,80,0.8))'}}>🔒</div>
+            <div style={{
+              fontFamily:"'Cinzel Decorative',serif",fontWeight:900,
+              fontSize:22,color:'#f0d060',letterSpacing:2,
+              textShadow:'0 0 22px rgba(240,208,96,0.6)',marginBottom:10,
+            }}>Sign In Required</div>
+            <p style={{
+              fontFamily:"'Rajdhani',sans-serif",fontSize:13,lineHeight:1.7,
+              color:'rgba(255,255,255,0.5)',letterSpacing:1,marginBottom:22,
+            }}>
+              Sign in to access the Shop, purchase premium skins, and earn coins by playing.
+            </p>
+            <button onClick={()=>{setShowLoginPrompt(false);openSignIn&&openSignIn();}} style={{
+              width:'100%',maxWidth:260,padding:'12px',margin:'0 auto 10px',display:'block',
+              background:'linear-gradient(135deg,#a87818,#d4a828 35%,#ffe068 55%,#d4a828 75%,#8a6018)',
+              backgroundSize:'200% auto',animation:'shimmer 4s linear infinite',
+              border:'none',borderRadius:8,fontFamily:"'Cinzel',serif",fontSize:13,
+              letterSpacing:5,color:'#1c0e00',fontWeight:900,textTransform:'uppercase',cursor:'pointer',
+            }}>🔑 Sign In</button>
+            <button onClick={()=>{setShowLoginPrompt(false);openSignUp&&openSignUp();}} style={{
+              width:'100%',maxWidth:260,padding:'10px',margin:'0 auto 10px',display:'block',
+              background:'rgba(212,180,80,0.08)',
+              border:'1.5px solid rgba(212,180,80,0.3)',borderRadius:8,
+              fontFamily:"'Cinzel',serif",fontSize:12,letterSpacing:4,
+              color:'#f0d060',fontWeight:600,textTransform:'uppercase',cursor:'pointer',
+            }}>✨ Create Account</button>
+            <button onClick={()=>setShowLoginPrompt(false)} style={{
+              background:'none',border:'none',marginTop:6,
+              fontFamily:"'Rajdhani',sans-serif",fontSize:12,fontWeight:700,
+              color:'rgba(212,180,80,0.45)',letterSpacing:2,cursor:'pointer',
+            }}>✕ Close</button>
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -540,6 +653,9 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
                       {val:stats.totalDeaths??0,lbl:"Deaths"},
                       {val:Number(stats.kd??0).toFixed(2),lbl:"K/D"},
                       {val:`${Number(stats.avgTerritory??0).toFixed(1)}%`,lbl:"Avg Territory"},
+                      {val:`🪙 ${coins}`,lbl:"Coins"},
+                      {val:unlockedSkins.length,lbl:"Skins"},
+                      {val:`${6-unlockedSkins.length}`,lbl:"Locked"},
                     ].map((s,i)=>(
                       <div key={i} style={{
                         display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -741,30 +857,48 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
             {/* ── BLOODLINE ── */}
             <div className="gol-section-label" style={{marginTop:14}}>{sectionLabel("🩸","Choose Your Bloodline")}</div>
             <div className="gol-el-grid" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-              {ELEMENTS.map(e=>(
-                <button key={e.id} className="el-btn gol-el-btn-inner" onClick={()=>setSelectedElement(e.colorIndex)} style={{
+              {ELEMENTS.map(e=>{
+                const isLocked = !unlockedSkins.includes(e.id);
+                return (
+                <button key={e.id} className="el-btn gol-el-btn-inner" onClick={()=>{
+                  if (isLocked) {
+                    if (isSignedIn) setShowShop(true);
+                    else setShowLoginPrompt(true);
+                    return;
+                  }
+                  setSelectedElement(e.colorIndex);
+                }} style={{
                   padding:"10px 4px 7px",
-                  background: selectedElement===e.colorIndex
+                  background: selectedElement===e.colorIndex && !isLocked
                     ? `linear-gradient(160deg,${e.bg},rgba(16,14,8,0.94))`
                     : "rgba(255,255,255,0.03)",
-                  border:`1.5px solid ${selectedElement===e.colorIndex ? e.color+"99" : "rgba(212,180,80,0.12)"}`,
+                  border:`1.5px solid ${selectedElement===e.colorIndex && !isLocked ? e.color+"99" : "rgba(212,180,80,0.12)"}`,
                   borderRadius:8,
                   display:"flex",flexDirection:"column",alignItems:"center",gap:5,
-                  boxShadow: selectedElement===e.colorIndex
+                  boxShadow: selectedElement===e.colorIndex && !isLocked
                     ? `0 0 28px ${e.glow}44,0 4px 20px rgba(0,0,0,0.55),inset 0 1px 0 rgba(255,255,255,0.07)`
                     : "0 2px 10px rgba(0,0,0,0.5)",
-                  transform: selectedElement===e.colorIndex ? "scale(1.05) translateY(-2px)" : "scale(1)",
+                  transform: selectedElement===e.colorIndex && !isLocked ? "scale(1.05) translateY(-2px)" : "scale(1)",
                   outline:"none",
+                  opacity: isLocked ? 0.5 : 1,
+                  position:"relative",
                 }}>
-                  <span className="gol-el-emoji" style={{fontSize:20,lineHeight:1,filter: selectedElement===e.colorIndex?`drop-shadow(0 0 10px ${e.glow})`:"none"}}>{e.emoji}</span>
+                  {isLocked && (
+                    <div style={{
+                      position:"absolute",top:4,right:6,fontSize:12,
+                      filter:"drop-shadow(0 0 4px rgba(0,0,0,0.8))",
+                    }}>🔒</div>
+                  )}
+                  <span className="gol-el-emoji" style={{fontSize:20,lineHeight:1,filter: selectedElement===e.colorIndex && !isLocked ?`drop-shadow(0 0 10px ${e.glow})`:"grayscale(0.4)"}}>{e.emoji}</span>
                   <span className="gol-el-label" style={{
                     fontSize:9,letterSpacing:3,fontWeight:700,
                     fontFamily:"'Rajdhani',sans-serif",textTransform:"uppercase",
-                    color: selectedElement===e.colorIndex ? e.textColor : "rgba(212,180,80,0.38)",
-                    textShadow: selectedElement===e.colorIndex ? `0 0 10px ${e.glow}` : "none",
-                  }}>{e.label}</span>
+                    color: selectedElement===e.colorIndex && !isLocked ? e.textColor : "rgba(212,180,80,0.38)",
+                    textShadow: selectedElement===e.colorIndex && !isLocked ? `0 0 10px ${e.glow}` : "none",
+                  }}>{isLocked ? `🪙 ${e.id==='crystal'?50:100}` : e.label}</span>
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             {/* ── STATS BUTTON ── */}
