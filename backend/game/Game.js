@@ -196,12 +196,18 @@ class Game {
     player.dead = true;
     player.deaths++;
     player.trail.clear();
-    player.owned.clear();
-    player.score = 0;
 
     if (killer) {
       killer.kills++;
+      // Transfer all of the victim's territory to the killer
+      for (const tile of player.owned) {
+        killer.owned.add(tile);
+      }
+      killer.score = killer.owned.size;
     }
+
+    player.owned.clear();
+    player.score = 0;
 
     // Auto-respawn after 2 seconds
     setTimeout(() => {

@@ -210,10 +210,15 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
 
   const handleWalletUpdate = (newCoins, newSkins) => {
     if (newCoins !== undefined) setCoins(newCoins);
-    if (newSkins) setUnlockedSkins(newSkins);
+    if (newSkins) {
+      // Always ensure the 4 free skins are included
+      const merged = new Set(newSkins);
+      ['lava','ocean','fungi','earth'].forEach(s => merged.add(s));
+      setUnlockedSkins(Array.from(merged));
+    }
   };
 
-  // ── Load rooms via socket ──────────────────────────────────────
+  // ── Load rooms via socket + live sync ───────────────────────────
   useEffect(() => {
     const loadRooms = async () => {
       try {
@@ -221,11 +226,19 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
         socketService.emit('room:list', (data) => {
           setRooms(data.rooms || []);
         });
+        // Listen for real-time room updates
+        socketService.on('room:updated', (data) => {
+          setRooms(data.rooms || []);
+        });
       } catch (err) {
         console.error('Failed to load rooms:', err);
       }
     };
     loadRooms();
+
+    return () => {
+      socketService.off('room:updated');
+    };
   }, []);
 
   // ── Intro animation ────────────────────────────────────────────
