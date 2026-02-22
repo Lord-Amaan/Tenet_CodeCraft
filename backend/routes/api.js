@@ -180,4 +180,189 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
+// ── GET /api/wallet ──────────────────────────────────────────────────
+// Protected: returns the user's coins + unlocked skins
+router.get('/wallet', requireClerkAuth, async (req, res) => {
+  try {
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
+    const clerkUserId = getClerkUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const user = await User.findOneAndUpdate(
+      { clerkUserId },
+      { clerkUserId },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({
+      success: true,
+      coins: user.coins,
+      unlockedSkins: user.unlockedSkins,
+    });
+  } catch (err) {
+    console.error('Error fetching wallet:', err);
+    res.status(500).json({ error: 'Failed to fetch wallet' });
+  }
+});
+
+// ── POST /api/reward-coins ──────────────────────────────────────────
+// Protected: add or subtract coins (server-authoritative)
+// body: { kills, deaths, isWinner }
+router.post('/reward-coins', requireClerkAuth, async (req, res) => {
+  try {
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
+    const clerkUserId = getClerkUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { kills = 0, deaths = 0, isWinner = false } = req.body;
+
+    // Economy: +2 per kill, -1 per death, +10 for round win
+    let delta = (kills * 2) - (deaths * 1) + (isWinner ? 10 : 0);
+
+    const user = await User.findOneAndUpdate(
+      { clerkUserId },
+      { $inc: { coins: delta } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    // Floor at 0
+    if (user.coins < 0) {
+      user.coins = 0;
+      await user.save();
+    }
+
+    console.log(`💰 ${clerkUserId}: ${delta >= 0 ? '+' : ''}${delta} coins → ${user.coins}`);
+    res.json({ success: true, coins: user.coins, delta });
+  } catch (err) {
+    console.error('Error rewarding coins:', err);
+    res.status(500).json({ error: 'Failed to reward coins' });
+  }
+});
+
+// ── POST /api/coin-event ────────────────────────────────────────────
+// Protected: lightweight real-time coin update for a single event
+// body: { type: 'kill' | 'death' | 'win' }
+router.post('/coin-event', requireClerkAuth, async (req, res) => {
+  try {
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
+    const clerkUserId = getClerkUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { type } = req.body;
+    const deltas = { kill: 2, death: -1, win: 10 };
+    const delta = deltas[type];
+    if (delta === undefined) return res.status(400).json({ error: 'Invalid event type' });
+
+    const user = await User.findOneAndUpdate(
+      { clerkUserId },
+      { $inc: { coins: delta } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    // Floor at 0
+    if (user.coins < 0) {
+      user.coins = 0;
+      await user.save();
+    }
+
+    res.json({ success: true, coins: user.coins, delta });
+  } catch (err) {
+    console.error('Error processing coin event:', err);
+    res.status(500).json({ error: 'Failed to process coin event' });
+  }
+});
+
+// ── POST /api/buy-skin ──────────────────────────────────────────────
+// Protected: spend coins to unlock a skin
+// body: { skinId }
+router.post('/buy-skin', requireClerkAuth, async (req, res) => {
+  try {
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
+    const clerkUserId = getClerkUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { skinId } = req.body;
+    const { SKIN_CATALOG } = await import('./api.js');      // self-import for catalog
+    const skin = SKIN_CATALOG.find(s => s.id === skinId);
+    if (!skin) return res.status(400).json({ error: 'Unknown skin' });
+
+    const user = await User.findOne({ clerkUserId });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (user.unlockedSkins.includes(skinId)) {
+      return res.json({ success: true, already: true, coins: user.coins, unlockedSkins: user.unlockedSkins });
+    }
+
+    if (user.coins < skin.price) {
+      return res.status(400).json({ error: 'Not enough coins', coins: user.coins, price: skin.price });
+    }
+
+    user.coins -= skin.price;
+    user.unlockedSkins.push(skinId);
+    await user.save();
+
+    console.log(`🛒 ${clerkUserId} bought skin "${skinId}" for ${skin.price} coins. Remaining: ${user.coins}`);
+    res.json({ success: true, coins: user.coins, unlockedSkins: user.unlockedSkins });
+  } catch (err) {
+    console.error('Error buying skin:', err);
+    res.status(500).json({ error: 'Failed to buy skin' });
+  }
+});
+
+// ── POST /api/buy-coins ─────────────────────────────────────────────
+// Protected: simulate in-app purchase (dev mode — no real payment)
+// body: { packId }
+router.post('/buy-coins', requireClerkAuth, async (req, res) => {
+  try {
+    if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
+    const clerkUserId = getClerkUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { packId } = req.body;
+    const { COIN_PACKS } = await import('./api.js');
+    const pack = COIN_PACKS.find(p => p.id === packId);
+    if (!pack) return res.status(400).json({ error: 'Unknown coin pack' });
+
+    const user = await User.findOneAndUpdate(
+      { clerkUserId },
+      { $inc: { coins: pack.coins } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    console.log(`💳 ${clerkUserId} purchased "${pack.label}" → ${user.coins} coins`);
+    res.json({ success: true, coins: user.coins, added: pack.coins });
+  } catch (err) {
+    console.error('Error buying coins:', err);
+    res.status(500).json({ error: 'Failed to buy coins' });
+  }
+});
+
+// ── GET /api/shop ────────────────────────────────────────────────────
+// Public: returns skin + coin pack catalogs
+router.get('/shop', (req, res) => {
+  // Import catalogs from this same file
+  import('./api.js').then(({ SKIN_CATALOG, COIN_PACKS }) => {
+    res.json({ success: true, skins: SKIN_CATALOG, coinPacks: COIN_PACKS });
+  });
+});
+
 export default router;
+
+// ── Skin shop catalog ──────────────────────────────────────────────
+// IDs match the ELEMENTS array on the frontend.
+// The first 4 are free (unlocked by default); crystal & frost are premium.
+export const SKIN_CATALOG = [
+  { id: 'lava',    colorIndex: 0, price: 0,   label: 'Lava'    },
+  { id: 'ocean',   colorIndex: 1, price: 0,   label: 'Ocean'   },
+  { id: 'fungi',   colorIndex: 2, price: 0,   label: 'Fungi'   },
+  { id: 'earth',   colorIndex: 3, price: 0,   label: 'Earth'   },
+  { id: 'crystal', colorIndex: 4, price: 50,  label: 'Crystal' },
+  { id: 'frost',   colorIndex: 5, price: 100, label: 'Frost'   },
+];
+
+// ── Coin‐pack catalog (in‐app purchase) ────────────────────────────
+export const COIN_PACKS = [
+  { id: 'pack_small',  coins: 50,  price: '$0.99',  label: '50 Coins'  },
+  { id: 'pack_medium', coins: 150, price: '$2.49',  label: '150 Coins' },
+  { id: 'pack_large',  coins: 500, price: '$4.99',  label: '500 Coins' },
+];

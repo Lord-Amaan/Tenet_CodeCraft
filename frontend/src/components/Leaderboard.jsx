@@ -39,6 +39,7 @@ export function Leaderboard() {
             className={`lb-entry ${i === 0 ? 'lb-entry-first' : ''}`}
             style={{ '--entry-color': meta.color, animationDelay: `${i * 0.06}s` }}
           >
+            {i === 0 && <span className="lb-crown">👑</span>}
             <span className="lb-entry-rank">{i < 3 ? RANK_LABELS[i] : `${i + 1}th`}</span>
             <span className="lb-entry-emoji">{meta.emoji}</span>
             <span className="lb-entry-name">{entry.name}</span>

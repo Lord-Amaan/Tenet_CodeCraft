@@ -11,6 +11,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: 'Player',
   },
+  coins: {
+    type: Number,
+    default: 0,
+  },
+  unlockedSkins: {
+    type: [String],
+    default: ['lava', 'ocean', 'fungi', 'earth'],  // 4 free starter skins
+  },
   createdAt: {
     type: Date,
     default: Date.now,

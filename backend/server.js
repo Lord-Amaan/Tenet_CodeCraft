@@ -72,6 +72,35 @@ setInterval(() => {
   for (const [roomCode, room] of roomManager.rooms) {
     if (room.players.size === 0) continue;
 
+    // Check if round is over
+    if (room.game.isRoundOver() && !room.game.roundEnded) {
+      room.game.roundEnded = true;
+      room.game.roundEndedAt = Date.now();
+      const results = room.game.getRoundResults();
+      io.to(roomCode).emit('game:roundEnd', { results, restartIn: 9 });
+
+      // Auto-reset after 9 seconds so players can see results
+      setTimeout(() => {
+        const r = roomManager.getRoom(roomCode);
+        if (r && r.players.size > 0) {
+          r.game.resetRound();
+          io.to(roomCode).emit('game:roundReset');
+        }
+      }, 9000);
+    }
+
+    // Don't update game during round-end cooldown
+    if (room.game.roundEnded) {
+      // Still broadcast state so timer shows 0
+      const gameState = room.game.getGameState();
+      io.to(roomCode).emit('game:update', {
+        roomCode,
+        gameState,
+        playerCount: room.players.size,
+      });
+      continue;
+    }
+
     room.game.updateGame();
     const gameState = room.game.getGameState();
 

@@ -4,8 +4,13 @@ export function setupSocketHandlers(io, roomManager) {
     let currentRoom = null;
 
     // Create a new room
-    socket.on('room:create', (callback) => {
-      const roomCode = roomManager.createRoom();
+    socket.on('room:create', (options, callback) => {
+      // Handle backward compatibility: room:create(callback) with no options
+      if (typeof options === 'function') {
+        callback = options;
+        options = {};
+      }
+      const roomCode = roomManager.createRoom(options || {});
       if (typeof callback === 'function') {
         callback({ roomCode });
       }
@@ -28,9 +33,9 @@ export function setupSocketHandlers(io, roomManager) {
       }
       const result = roomManager.joinRoom(roomCode, socket.id, playerName, colorIndex);
       
-      if (!result) {
+      if (!result || result.error) {
         if (typeof callback === 'function') {
-          callback({ success: false, error: 'Room not found' });
+          callback({ success: false, error: result?.error || 'Room not found' });
         }
         return;
       }

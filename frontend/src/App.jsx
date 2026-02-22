@@ -33,7 +33,9 @@ function App() {
     kills: 0,
     deaths: 0,
     score: 0,
+    coins: 0,
     playerCount: 0,
+    minimapData: null,
   });
 
   // Auth state
@@ -183,6 +185,8 @@ function App() {
               playerId={playerId}
               onLeaveRoom={handleLeaveRoom}
               onStatsUpdate={handleStatsUpdate}
+              getToken={getToken}
+              isSignedIn={isSignedIn}
             />
             <Leaderboard />
           </div>
@@ -192,9 +196,12 @@ function App() {
               kills={playerStats.kills}
               deaths={playerStats.deaths}
               score={playerStats.score}
+              coins={playerStats.coins}
               playerCount={playerStats.playerCount}
               roomCode={roomCode}
               onLeaveRoom={handleLeaveRoom}
+              playerId={playerId}
+              minimapData={playerStats.minimapData}
             />
           </div>
         </div>
