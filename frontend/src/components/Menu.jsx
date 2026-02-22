@@ -673,7 +673,6 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
                       {val:stats.totalKills??0,lbl:"Kills"},
                       {val:stats.totalDeaths??0,lbl:"Deaths"},
                       {val:Number(stats.kd??0).toFixed(2),lbl:"K/D"},
-                      {val:`${Number(stats.avgTerritory??0).toFixed(1)}%`,lbl:"Avg Territory"},
                       {val:`🪙 ${coins}`,lbl:"Coins"},
                       {val:unlockedSkins.length,lbl:"Skins"},
                       {val:`${6-unlockedSkins.length}`,lbl:"Locked"},
