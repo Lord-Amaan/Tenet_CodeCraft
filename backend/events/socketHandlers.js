@@ -1,4 +1,10 @@
 export function setupSocketHandlers(io, roomManager) {
+  // Broadcast updated room list to all connected clients
+  function broadcastRoomList() {
+    const rooms = roomManager.getRoomsInfo();
+    io.emit('room:updated', { rooms });
+  }
+
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
     let currentRoom = null;
@@ -14,6 +20,7 @@ export function setupSocketHandlers(io, roomManager) {
       if (typeof callback === 'function') {
         callback({ roomCode });
       }
+      broadcastRoomList();
     });
 
     // Get list of available rooms
@@ -61,6 +68,7 @@ export function setupSocketHandlers(io, roomManager) {
           gameState: roomState.gameState 
         });
       }
+      broadcastRoomList();
     });
 
     // Player direction change (auto-movement is server-side)
@@ -115,6 +123,7 @@ export function setupSocketHandlers(io, roomManager) {
       }
 
       currentRoom = null;
+      broadcastRoomList();
     });
 
     // Disconnect
@@ -131,6 +140,7 @@ export function setupSocketHandlers(io, roomManager) {
       }
 
       console.log(`User disconnected: ${socket.id}`);
+      broadcastRoomList();
     });
 
     // Handle errors

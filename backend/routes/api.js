@@ -6,6 +6,16 @@ import GameStats from '../models/GameStats.js';
 
 const router = express.Router();
 
+// Free skins that are always unlocked for every player
+const FREE_SKINS = ['lava', 'ocean', 'fungi', 'earth'];
+
+// Ensure the free skins are always present in the array
+function ensureFreeSkins(skins) {
+  const set = new Set(skins || []);
+  FREE_SKINS.forEach(s => set.add(s));
+  return Array.from(set);
+}
+
 // Helper to check DB connection
 function dbReady() {
   return mongoose.connection.readyState === 1;
@@ -194,10 +204,17 @@ router.get('/wallet', requireClerkAuth, async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
+    // Always ensure the free skins are included
+    const allSkins = ensureFreeSkins(user.unlockedSkins);
+    if (allSkins.length !== user.unlockedSkins.length) {
+      user.unlockedSkins = allSkins;
+      await user.save();
+    }
+
     res.json({
       success: true,
       coins: user.coins,
-      unlockedSkins: user.unlockedSkins,
+      unlockedSkins: allSkins,
     });
   } catch (err) {
     console.error('Error fetching wallet:', err);
@@ -299,6 +316,8 @@ router.post('/buy-skin', requireClerkAuth, async (req, res) => {
 
     user.coins -= skin.price;
     user.unlockedSkins.push(skinId);
+    // Always ensure free skins are present
+    user.unlockedSkins = ensureFreeSkins(user.unlockedSkins);
     await user.save();
 
     console.log(`🛒 ${clerkUserId} bought skin "${skinId}" for ${skin.price} coins. Remaining: ${user.coins}`);
