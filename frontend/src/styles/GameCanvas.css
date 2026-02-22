@@ -175,6 +175,56 @@
   100% { opacity: 0; transform: scale(1.05); }
 }
 
+/* ═══ Waiting / Loading Overlay ════════════════════════════════════════════ */
+.gc-waiting-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 8, 2, 0.75);
+  backdrop-filter: blur(6px);
+  animation: waitFadeIn 0.4s ease-out;
+}
+@keyframes waitFadeIn {
+  from { opacity: 0; } to { opacity: 1; }
+}
+.gc-waiting-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px 48px;
+  border-radius: 16px;
+  background: rgba(30, 25, 12, 0.92);
+  border: 1px solid rgba(200, 170, 60, 0.25);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+.gc-waiting-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(200, 170, 60, 0.15);
+  border-top-color: rgba(255, 215, 0, 0.8);
+  border-radius: 50%;
+  animation: waitSpin 0.8s linear infinite;
+}
+@keyframes waitSpin {
+  to { transform: rotate(360deg); }
+}
+.gc-waiting-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #f5ecd0;
+  letter-spacing: 0.3px;
+}
+.gc-waiting-sub {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(245, 236, 208, 0.55);
+}
+
 /* ═══ Footer ═══════════════════════════════════════════════════════════════ */
 .gc-footer {
   display: flex;

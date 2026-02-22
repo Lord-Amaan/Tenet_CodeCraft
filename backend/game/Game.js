@@ -54,6 +54,11 @@ class Game {
     const player = new Player(socketId, playerName, spawn.x, spawn.y, this.cols, this.rows, colorIndex);
     this.players.set(socketId, player);
 
+    // If a round had ended (e.g. room was empty when reset timer fired), auto-reset now
+    if (this.roundEnded || (this.roundStartTime && this.getTimeLeft() <= 0)) {
+      this.resetRound();
+    }
+
     // Start round timer when first player joins
     if (!this.roundStartTime) {
       this.roundStartTime = Date.now();

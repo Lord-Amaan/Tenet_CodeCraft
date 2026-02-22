@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { socketService } from '../services/socket';
+import { audioEngine } from '../services/audioEngine';
 import '../styles/GameCanvas.css';
 
 const TILE = 32;
@@ -894,6 +895,33 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   // Tile flip animations: key "x,y" -> { start: timestamp, colorIndex, delay }
   const tileAnimsRef = useRef(new Map());
 
+  // ── Audio tracking refs ────────────────────────────────────────────────
+  const bgmStartedRef = useRef(false);
+  const prevKillsRef = useRef(0);
+  const wasDeadRef = useRef(false);
+  const soundEnabledRef = useRef(true);
+
+  // ── Audio init: load eagerly on mount, resume context on first gesture ──
+  useEffect(() => {
+    // Start loading all audio files immediately (fetch + decode don't need gesture)
+    audioEngine.loadAll();
+
+    // AudioContext.resume() and HTMLAudioElement.play() need a user gesture
+    const resumeOnGesture = () => {
+      audioEngine.resume();
+      window.removeEventListener('click', resumeOnGesture);
+      window.removeEventListener('keydown', resumeOnGesture);
+    };
+    window.addEventListener('click', resumeOnGesture);
+    window.addEventListener('keydown', resumeOnGesture);
+    return () => {
+      window.removeEventListener('click', resumeOnGesture);
+      window.removeEventListener('keydown', resumeOnGesture);
+    };
+  }, []);
+
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+
   useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
   useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
   useEffect(() => { onStatsUpdateRef.current = onStatsUpdate; }, [onStatsUpdate]);
@@ -941,6 +969,12 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
         gameStateRef.current = gs;
         setGameState(gs);
 
+        // Start BGM on first game update (round is live)
+        if (!bgmStartedRef.current && gs.players && soundEnabledRef.current) {
+          bgmStartedRef.current = true;
+          audioEngine.startBGM(0.25);
+        }
+
         if (gs.players) {
           const posMap = playerPosRef.current;
           for (const p of gs.players) {
@@ -962,11 +996,16 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
             }
             prevTrailSizeRef.current.set(p.id, p.trail ? p.trail.length : 0);
 
-            // Detect capture (owned size jumped) -> burst particles + flip animation
+            // Detect capture (owned size jumped) -> burst particles + flip animation + audio
             const prevOwned = prevOwnedRef.current.get(p.id) || 0;
-            if (p.owned && p.owned.length > prevOwned + 5) {
+            if (p.owned && p.owned.length > prevOwned) {
               const pc = PLAYER_COLORS[p.colorIndex] || PLAYER_COLORS[0];
               captureParticles.current.emit(p.x * TILE + TILE / 2, p.y * TILE + TILE / 2, pc.particle, 20, 4);
+
+              // Capture sound — local player only
+              if (p.id === playerIdRef.current) {
+                audioEngine.play('capture', 0.5);
+              }
 
               // Find newly captured tiles and schedule flip animations
               const prevSet = prevOwnedSetsRef.current.get(p.id);
@@ -978,7 +1017,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
                     tileAnimsRef.current.set(k, {
                       start: now,
                       colorIndex: p.colorIndex,
-                      delay: Math.min(idx * 12, 600), // stagger up to 600ms
+                      delay: Math.min(idx * 12, 600),
                     });
                     idx++;
                   }
@@ -999,6 +1038,13 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
             setTimeout(() => setFlashCapture(false), 400);
           }
           prevScoreRef.current = local.score;
+
+          // Eliminated sound — local player just died
+          if (local.dead && !wasDeadRef.current) {
+            audioEngine.play('eliminated', 0.6);
+          }
+          wasDeadRef.current = !!local.dead;
+
           if (local.dead && !deathAnimRef.current.active) {
             deathAnimRef.current = { active: true, progress: 0 };
           } else if (!local.dead) {
@@ -1037,6 +1083,12 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
 
     const handleRoundEnd = (data) => {
       setRoundResults(data.results);
+      // Stop BGM on round end
+      audioEngine.stopBGM();
+      bgmStartedRef.current = false;
+      // Reset tracking refs
+      prevKillsRef.current = 0;
+      wasDeadRef.current = false;
       // Start countdown timer
       const total = data.restartIn || 9;
       setRoundCountdown(total);
@@ -1061,6 +1113,14 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
         clearInterval(roundCountdownRef.current);
         roundCountdownRef.current = null;
       }
+      // Restart BGM for the new round
+      if (soundEnabledRef.current) {
+        bgmStartedRef.current = true;
+        audioEngine.startBGM(0.25);
+      }
+      // Reset tracking refs
+      prevKillsRef.current = 0;
+      wasDeadRef.current = false;
     };
 
     socketService.on('game:update', handleGameUpdate);
@@ -1508,6 +1568,12 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
         return 0;
       });
 
+      // Determine #1 player by score for crown
+      const alivePlayers = gs.players.filter(p => !p.dead);
+      const topPlayer = alivePlayers.length > 0
+        ? alivePlayers.reduce((best, p) => p.score > best.score ? p : best, alivePlayers[0])
+        : null;
+
       for (const p of sorted) {
         if (p.dead) continue;
         const pos = posMap.get(p.id);
@@ -1517,22 +1583,57 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
         const cy = pos.y * TILE + TILE / 2 - camY;
         const pc = PLAYER_COLORS[p.colorIndex] || PLAYER_COLORS[0];
         const isLocal = p.id === playerIdRef.current;
+        const isTopPlayer = topPlayer && p.id === topPlayer.id && topPlayer.score > 0;
         const r = TILE / 2 - 1;
         const bob = Math.sin(time * 4 + p.colorIndex * 1.2) * 1.5;
         const skinIdx = p.colorIndex ?? 0;
 
-        // Shadow
-        const shadowPulse = 1 + Math.sin(time * 3) * 0.08;
-        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        // ── BIOLUMINESCENT GLOW (optimized — 1 gradient + 3 particles + 1 ring) ──
+        const glowPulse = 0.6 + Math.sin(time * 2.5 + p.colorIndex * 0.9) * 0.4;
+
+        // Single ambient glow (combines old layers 1+2 into one gradient)
+        const ambientGlow = ctx.createRadialGradient(cx, cy + bob, r * 0.3, cx, cy + bob, r * 2.5);
+        ambientGlow.addColorStop(0, pc.trailGlow.replace(/[\d.]+\)$/, `${0.3 * glowPulse})`));
+        ambientGlow.addColorStop(0.5, pc.trailGlow.replace(/[\d.]+\)$/, `${0.1 * glowPulse})`));
+        ambientGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = ambientGlow;
         ctx.beginPath();
-        ctx.ellipse(cx, cy + r + 4, r * 0.9 * shadowPulse, 3.5, 0, 0, TWO_PI);
+        ctx.arc(cx, cy + bob, r * 2.5, 0, TWO_PI);
+        ctx.fill();
+
+        // 3 floating particles (simple colored dots — no per-particle gradients)
+        for (let i = 0; i < 3; i++) {
+          const pa = time * (0.5 + i * 0.2) + i * 2.094 + p.colorIndex * 1.1;
+          const pd = r * 1.2 + Math.sin(time * 1.5 + i * 0.9) * r * 0.6;
+          const px2 = cx + Math.cos(pa) * pd;
+          const py2 = cy + bob + Math.sin(pa) * pd * 0.7;
+          const pAlpha = 0.35 + Math.sin(time * 3.5 + i * 2) * 0.2;
+          ctx.fillStyle = pc.trailGlow.replace(/[\d.]+\)$/, `${pAlpha})`);
+          ctx.beginPath();
+          ctx.arc(px2, py2, 1.8, 0, TWO_PI);
+          ctx.fill();
+        }
+
+        // Pulsing glow ring
+        const ringAlpha = 0.15 + glowPulse * 0.12;
+        const ringR = r + 3 + Math.sin(time * 2.8) * 2;
+        ctx.strokeStyle = pc.trailGlow.replace(/[\d.]+\)$/, `${ringAlpha})`);
+        ctx.lineWidth = 1.5 + glowPulse * 0.8;
+        ctx.beginPath();
+        ctx.arc(cx, cy + bob, ringR, 0, TWO_PI);
+        ctx.stroke();
+
+        // Shadow
+        ctx.fillStyle = `rgba(0,0,0,0.12)`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + r + 4, r * 0.9, 3.5, 0, 0, TWO_PI);
         ctx.fill();
 
         // Draw element-specific skin
         const skinDrawer = SKIN_DRAWERS[skinIdx] || SKIN_DRAWERS[0];
         skinDrawer(ctx, cx, cy, r, time, bob, isLocal);
 
-        // Eyes (on top of skin)
+        // ── Eyes (on top of skin) ────────────────────────────────────────
         const eyeOffsetX = 5;
         const eyeY = cy - 2 + bob;
         const eyeR = 4;
@@ -1541,6 +1642,7 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
         const dirY = p.dir?.y || 0;
         const pupilShift = 2;
 
+        // Eye whites
         ctx.fillStyle = '#fff';
         ctx.beginPath();
         ctx.arc(cx - eyeOffsetX, eyeY, eyeR, 0, TWO_PI);
@@ -1581,16 +1683,101 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
         ctx.arc(cx, cy + 3 + bob, 4, 0.15 * Math.PI, 0.85 * Math.PI);
         ctx.stroke();
 
-        // Name pill
+        // Name pill (drawn first so crown sits above it)
+        const nameY = cy - r - 18;
         ctx.font = 'bold 11px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
         const nameW = ctx.measureText(p.name).width + 12;
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
         ctx.beginPath();
-        ctx.roundRect(cx - nameW / 2, cy - r - 18, nameW, 16, 8);
+        ctx.roundRect(cx - nameW / 2, nameY, nameW, 16, 8);
         ctx.fill();
         ctx.fillStyle = '#fff';
-        ctx.fillText(p.name, cx, cy - r - 6);
+        ctx.fillText(p.name, cx, nameY + 12);
+
+        // ── CROWN ON #1 PLAYER (above the name pill) ────────────────────
+        if (isTopPlayer) {
+          const crownBob = Math.sin(time * 3) * 2;
+          const crownY = nameY - 12 + crownBob;
+          const crownW = 16;
+          const crownH = 10;
+          const crownGlow = 0.6 + Math.sin(time * 4) * 0.3;
+
+          // Crown glow aura
+          const cGlow = ctx.createRadialGradient(cx, crownY, 0, cx, crownY, crownW);
+          cGlow.addColorStop(0, `rgba(255,215,0,${0.3 * crownGlow})`);
+          cGlow.addColorStop(1, 'rgba(255,215,0,0)');
+          ctx.fillStyle = cGlow;
+          ctx.beginPath();
+          ctx.arc(cx, crownY, crownW, 0, TWO_PI);
+          ctx.fill();
+
+          // Crown shape
+          ctx.fillStyle = `rgba(255,215,0,${0.85 + crownGlow * 0.15})`;
+          ctx.beginPath();
+          ctx.moveTo(cx - crownW / 2, crownY + crownH / 2);      // bottom-left
+          ctx.lineTo(cx - crownW / 2, crownY - crownH / 4);      // left up
+          ctx.lineTo(cx - crownW / 4, crownY + crownH / 6);      // dip
+          ctx.lineTo(cx, crownY - crownH / 2);                    // center peak
+          ctx.lineTo(cx + crownW / 4, crownY + crownH / 6);      // dip
+          ctx.lineTo(cx + crownW / 2, crownY - crownH / 4);      // right up
+          ctx.lineTo(cx + crownW / 2, crownY + crownH / 2);      // bottom-right
+          ctx.closePath();
+          ctx.fill();
+
+          // Crown outline
+          ctx.strokeStyle = `rgba(180,140,0,${0.7 + crownGlow * 0.3})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          // Jewels on crown tips
+          const jewels = [
+            [cx - crownW / 2, crownY - crownH / 4, '#ff4444'],
+            [cx, crownY - crownH / 2, '#44ff44'],
+            [cx + crownW / 2, crownY - crownH / 4, '#4488ff'],
+          ];
+          for (const [jx, jy, jc] of jewels) {
+            ctx.fillStyle = jc;
+            ctx.beginPath();
+            ctx.arc(jx, jy, 1.8, 0, TWO_PI);
+            ctx.fill();
+            // Jewel sparkle
+            const sparkle = Math.sin(time * 5 + jx * 0.1);
+            if (sparkle > 0.3) {
+              ctx.fillStyle = `rgba(255,255,255,${(sparkle - 0.3) * 0.8})`;
+              ctx.beginPath();
+              ctx.arc(jx, jy, 1, 0, TWO_PI);
+              ctx.fill();
+            }
+          }
+
+          // Sparkle particles around crown
+          for (let i = 0; i < 4; i++) {
+            const sa = time * 2.5 + i * 1.57;
+            const sparkleVisible = Math.sin(sa);
+            if (sparkleVisible > 0.4) {
+              const sx = cx + Math.cos(sa * 0.7 + i) * (crownW * 0.6 + 3);
+              const sy = crownY + Math.sin(sa * 1.1) * 5 - 2;
+              const ss = 1.5 + sparkleVisible * 1.5;
+              ctx.fillStyle = `rgba(255,235,100,${(sparkleVisible - 0.4) * 0.7})`;
+              // 4-point star sparkle
+              ctx.beginPath();
+              ctx.moveTo(sx, sy - ss);
+              ctx.lineTo(sx + ss * 0.25, sy);
+              ctx.lineTo(sx, sy + ss);
+              ctx.lineTo(sx - ss * 0.25, sy);
+              ctx.closePath();
+              ctx.fill();
+              ctx.beginPath();
+              ctx.moveTo(sx - ss, sy);
+              ctx.lineTo(sx, sy + ss * 0.25);
+              ctx.lineTo(sx + ss, sy);
+              ctx.lineTo(sx, sy - ss * 0.25);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
+        }
 
         // Score badge for local
         if (isLocal && p.score > 0) {
@@ -1785,6 +1972,9 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
   const timeStr = `${timeMin}:${timeSec.toString().padStart(2, '0')}`;
   const timeUrgent = timeLeftMs < 30000 && timeLeftMs > 0;
 
+  // Detect "stuck" state — we have a gameState but the round hasn't really started for us
+  const isWaiting = !gameState || (!localPlayer && !roundResults);
+
   const vpW = viewportSize.w;
   const vpH = viewportSize.h;
 
@@ -1829,6 +2019,17 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
         />
         {flashCapture && <div className="gc-flash" />}
 
+        {/* ── Waiting / Loading overlay ────────────────────────────────── */}
+        {isWaiting && (
+          <div className="gc-waiting-overlay">
+            <div className="gc-waiting-box">
+              <div className="gc-waiting-spinner" />
+              <p className="gc-waiting-title">Loading Game…</p>
+              <p className="gc-waiting-sub">Waiting for the server to start the round</p>
+            </div>
+          </div>
+        )}
+
         {/* ── Hamburger Menu (top-right, aligned with leaderboard top) ── */}
         <div className="gc-hamburger-wrap">
           <button
@@ -1848,7 +2049,17 @@ export function GameCanvas({ roomCode, playerName, playerId, onLeaveRoom, onStat
                 <span className="gc-hamburger-icon">📖</span>
                 <span className="gc-hamburger-label">Instructions</span>
               </button>
-              <button className="gc-hamburger-item" onClick={() => { setSoundEnabled(prev => !prev); }}>
+              <button className="gc-hamburger-item" onClick={() => {
+                setSoundEnabled(prev => {
+                  const next = !prev;
+                  audioEngine.setEnabled(next);
+                  if (next && !bgmStartedRef.current && !roundResults) {
+                    bgmStartedRef.current = true;
+                    audioEngine.startBGM(0.25);
+                  }
+                  return next;
+                });
+              }}>
                 <span className="gc-hamburger-icon">{soundEnabled ? '🔊' : '🔇'}</span>
                 <span className="gc-hamburger-label">Sound: {soundEnabled ? 'ON' : 'OFF'}</span>
               </button>

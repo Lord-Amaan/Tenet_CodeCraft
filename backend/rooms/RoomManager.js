@@ -1,5 +1,7 @@
 import Game from '../game/Game.js';
 
+const MAX_PLAYERS_PER_ROOM = 6;
+
 class RoomManager {
   constructor() {
     this.rooms = new Map();
@@ -38,7 +40,11 @@ class RoomManager {
 
   joinRoom(roomCode, socketId, playerName, colorIndex) {
     const room = this.rooms.get(roomCode);
-    if (!room) return null;
+    if (!room) return { error: 'Room not found' };
+
+    if (room.players.size >= MAX_PLAYERS_PER_ROOM) {
+      return { error: 'Room is full (max 6 players)' };
+    }
 
     const player = room.game.addPlayer(socketId, playerName, colorIndex);
     room.players.set(socketId, player);
@@ -99,6 +105,7 @@ class RoomManager {
       rooms.push({
         code,
         playerCount: room.players.size,
+        maxPlayers: MAX_PLAYERS_PER_ROOM,
         createdAt: room.createdAt,
       });
     }

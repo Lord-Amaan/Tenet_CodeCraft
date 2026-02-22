@@ -33,9 +33,9 @@ export function setupSocketHandlers(io, roomManager) {
       }
       const result = roomManager.joinRoom(roomCode, socket.id, playerName, colorIndex);
       
-      if (!result) {
+      if (!result || result.error) {
         if (typeof callback === 'function') {
-          callback({ success: false, error: 'Room not found' });
+          callback({ success: false, error: result?.error || 'Room not found' });
         }
         return;
       }
