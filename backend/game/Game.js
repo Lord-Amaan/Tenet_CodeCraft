@@ -140,8 +140,15 @@ class Game {
           player.trail.add(currentKey);
         }
 
-        // Add all trail tiles to owned first
-        player.trail.forEach(k => player.owned.add(k));
+        // Add all trail tiles to owned and steal from other players
+        player.trail.forEach(k => {
+          for (const other of this.players.values()) {
+            if (other.id !== player.id) {
+              other.owned.delete(k);
+            }
+          }
+          player.owned.add(k);
+        });
 
         // Also add the destination tile (the owned tile we're stepping onto)
         // to make sure the boundary is fully closed
@@ -154,11 +161,15 @@ class Game {
           for (const other of this.players.values()) {
             if (other.id !== player.id) {
               other.owned.delete(k);
-              other.score = other.owned.size;
             }
           }
           player.owned.add(k);
         });
+
+        // Update scores for all affected players
+        for (const p of this.players.values()) {
+          p.score = p.owned.size;
+        }
 
         player.trail.clear();
       }
