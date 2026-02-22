@@ -96,6 +96,7 @@ class GameAudioEngine {
       await Promise.all([
         this._load('capture',    '/audio/tile_acquired.mp3'),
         this._load('eliminated', '/audio/mixkit-player-losing-or-failing-2042.wav'),
+        this._load('coin_buy',   '/audio/coin_buy_audio.mp3'),
       ]);
     }
 

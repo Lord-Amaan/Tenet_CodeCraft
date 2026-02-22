@@ -976,7 +976,7 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:7}}>
                           <div style={{display:"flex",gap:3}}>
-                            {Array.from({length:4}).map((_,i)=>(
+                            {Array.from({length:6}).map((_,i)=>(
                               <div key={i} style={{
                                 width:7,height:7,borderRadius:2,
                                 background:i<room.playerCount?"#5aba50":"rgba(255,255,255,0.12)",
@@ -987,7 +987,7 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
                             ))}
                           </div>
                           <span style={{fontFamily:"'Rajdhani',sans-serif",fontSize:10,fontWeight:600,letterSpacing:1}}>
-                            <span style={{color:"rgba(212,180,80,0.75)"}}>{room.playerCount}/4</span>
+                            <span style={{color:"rgba(212,180,80,0.75)"}}>{room.playerCount}/6</span>
                             <span style={{color:"rgba(255,255,255,0.18)"}}> · </span>
                             <span style={{color:"#5aba50",fontWeight:700,textShadow:"0 0 8px #5aba5066"}}>OPEN FOR RECRUITS</span>
                           </span>

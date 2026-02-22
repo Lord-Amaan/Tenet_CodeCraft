@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getShopCatalog, getWallet, buySkin, buyCoins } from '../services/api';
+import { audioEngine } from '../services/audioEngine';
 
 const SKIN_EMOJIS = {
   lava: '🔥', ocean: '🌊', fungi: '🍄', earth: '🌿', crystal: '💎', frost: '❄️',
@@ -35,6 +36,7 @@ export function Shop({ getToken, coins, unlockedSkins, onClose, onWalletUpdate }
     try {
       const res = await buySkin(getToken, skinId);
       if (res.success) {
+        audioEngine.play('coin_buy', 0.7);
         onWalletUpdate(res.coins, res.unlockedSkins);
         setMsg(res.already ? 'Already owned!' : '✓ Skin unlocked!');
       } else {
@@ -49,6 +51,7 @@ export function Shop({ getToken, coins, unlockedSkins, onClose, onWalletUpdate }
     try {
       const res = await buyCoins(getToken, packId);
       if (res.success) {
+        audioEngine.play('coin_buy', 0.7);
         onWalletUpdate(res.coins, unlockedSkins);
         setMsg(`+${res.added} coins added!`);
       } else {
