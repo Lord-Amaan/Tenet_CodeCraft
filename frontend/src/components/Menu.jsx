@@ -3,6 +3,7 @@ import { socketService } from '../services/socket';
 import { getMyStats, getWallet } from '../services/api';
 import { getGuestSummary } from '../services/guestStats';
 import { Shop } from './Shop';
+import { audioEngine } from '../services/audioEngine';
 
 /* ── Load Google Fonts once ─────────────────────────────────────────── */
 if (typeof document !== "undefined" && !document.getElementById("gol-fonts")) {
@@ -229,6 +230,13 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
 
   // ── Intro animation ────────────────────────────────────────────
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
+
+  // ── Menu BGM ───────────────────────────────────────────────────
+  useEffect(() => {
+    audioEngine.loadAll();
+    audioEngine.startBGM(0.18);
+    return () => { audioEngine.stopBGM(); };
+  }, []);
 
   // ── Random glitch effect ───────────────────────────────────────
   useEffect(() => {
