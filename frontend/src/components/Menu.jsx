@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { socketService } from '../services/socket';
-import { getMyStats, getWallet } from '../services/api';
+import { getMyStats, getWallet, getLeaderboard } from '../services/api';
 import { getGuestSummary } from '../services/guestStats';
 import { Shop } from './Shop';
 import { audioEngine } from '../services/audioEngine';
@@ -178,9 +178,14 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
   const [isPrivate, setIsPrivate]       = useState(false);
 
   // Stats / auth views
-  const [view, setView]                 = useState('main'); // 'main' | 'stats'
+  const [view, setView]                 = useState('main'); // 'main' | 'stats' | 'leaderboard'
   const [stats, setStats]               = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
+
+  // Leaderboard
+  const [lbData, setLbData]             = useState([]);
+  const [lbLoading, setLbLoading]       = useState(false);
+  const [lbSort, setLbSort]             = useState('bestScore');
 
   // Wallet / shop
   const [coins, setCoins]               = useState(0);
@@ -190,10 +195,13 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
 
   const selEl = ELEMENTS.find(e => e.colorIndex === selectedElement);
 
-  // ── Auto-fill name from Clerk user ──────────────────────────────
+  // ── Auto-fill name from Clerk user (prefer email prefix) ─────
   useEffect(() => {
     if (isSignedIn && user && !playerName) {
-      setPlayerName(user.fullName || user.username || user.firstName || '');
+      // Extract the part before @ from primary email
+      const email = user.primaryEmailAddress?.emailAddress || '';
+      const emailPrefix = email.split('@')[0] || '';
+      setPlayerName(emailPrefix || user.fullName || user.username || user.firstName || '');
     }
   }, [isSignedIn, user]);
 
@@ -365,6 +373,25 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
       setStats(null);
     } finally {
       setStatsLoading(false);
+    }
+  };
+
+  // ── Leaderboard loader ────────────────────────────────────────
+  const openLeaderboard = async () => {
+    setView('leaderboard');
+    setLbLoading(true);
+    try {
+      const data = await getLeaderboard();
+      if (data && data.success) {
+        setLbData(data.leaderboard || []);
+      } else {
+        setLbData([]);
+      }
+    } catch (err) {
+      console.error('Failed to load leaderboard:', err);
+      setLbData([]);
+    } finally {
+      setLbLoading(false);
     }
   };
 
@@ -563,6 +590,175 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
       ))}
     </>
   );
+
+  /* ═══════════════════════════════════════════════════════════════
+     LEADERBOARD VIEW
+     ═══════════════════════════════════════════════════════════════ */
+  if (view === 'leaderboard') {
+    const SORT_OPTIONS = [
+      { key:'bestScore',  label:'Best Score',  icon:'🏆' },
+      { key:'totalKills', label:'Total Kills',  icon:'⚔' },
+      { key:'totalGames', label:'Games Played', icon:'🎮' },
+      { key:'kd',         label:'K/D Ratio',    icon:'💀' },
+      { key:'totalScore', label:'Total Score',  icon:'📊' },
+    ];
+
+    const sorted = [...lbData].sort((a, b) => (b[lbSort] || 0) - (a[lbSort] || 0))
+      .map((p, i) => ({ ...p, rank: i + 1 }));
+
+    const RANK_STYLES = {
+      1: { bg:'linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,180,0,0.06))', border:'rgba(255,215,0,0.45)', glow:'0 0 24px rgba(255,215,0,0.2)', icon:'👑', color:'#ffd700' },
+      2: { bg:'linear-gradient(135deg,rgba(192,192,192,0.12),rgba(160,160,180,0.05))', border:'rgba(192,192,192,0.35)', glow:'0 0 16px rgba(192,192,192,0.12)', icon:'🥈', color:'#c0c0d0' },
+      3: { bg:'linear-gradient(135deg,rgba(205,127,50,0.12),rgba(180,120,60,0.05))', border:'rgba(205,127,50,0.35)', glow:'0 0 16px rgba(205,127,50,0.12)', icon:'🥉', color:'#cd7f32' },
+    };
+
+    return (
+      <>
+        {backgroundLayers}
+        <div className="gol-main-scroll" style={{position:"fixed",inset:0,zIndex:3,display:"flex",flexDirection:"column",alignItems:"center",
+          overflowY:"auto",padding:"12px 10px 52px",WebkitOverflowScrolling:"touch"}}>
+          <div style={{width:"100%",maxWidth:580}}>
+            <div className="gol-card" style={cardStyle}>
+              {cardCorners}
+              <button className="back-btn-gol" onClick={()=>setView('main')} style={{
+                background:"none",border:"none",fontFamily:"'Rajdhani',sans-serif",
+                fontSize:13,fontWeight:700,color:"rgba(212,180,80,0.6)",
+                letterSpacing:2,padding:"4px 0",marginBottom:16,cursor:"pointer",
+              }}>← Back</button>
+
+              {/* Header */}
+              <div style={{textAlign:"center",marginBottom:16}}>
+                <div style={{fontSize:38,marginBottom:8,filter:"drop-shadow(0 0 18px rgba(255,215,0,0.8))"}}>🏆</div>
+                <div style={{
+                  fontFamily:"'Cinzel Decorative',serif",fontWeight:900,
+                  fontSize:26,color:"#f0d060",letterSpacing:3,
+                  textShadow:"0 0 22px rgba(240,208,96,0.6)",
+                }}>Leaderboard</div>
+                <div style={{
+                  fontSize:9,letterSpacing:5,color:"rgba(212,180,80,0.6)",
+                  fontFamily:"'Rajdhani',sans-serif",fontWeight:600,marginTop:6,textTransform:"uppercase",
+                }}>Global Rankings</div>
+              </div>
+
+              {/* Sort buttons */}
+              <div style={{display:"flex",gap:0,marginBottom:16,
+                background:"rgba(212,180,80,0.04)",borderRadius:8,
+                border:"1px solid rgba(212,180,80,0.12)",overflow:"hidden",flexWrap:"wrap"}}>
+                {SORT_OPTIONS.map(opt=>(
+                  <button key={opt.key} onClick={()=>setLbSort(opt.key)} style={{
+                    flex:1,minWidth:0,padding:"8px 4px",border:"none",cursor:"pointer",
+                    fontFamily:"'Rajdhani',sans-serif",fontSize:9,fontWeight:700,
+                    letterSpacing:1,textTransform:"uppercase",
+                    background:lbSort===opt.key?"rgba(212,180,80,0.15)":"transparent",
+                    color:lbSort===opt.key?"#f0d060":"rgba(212,180,80,0.4)",
+                    borderBottom:lbSort===opt.key?"2px solid #d4b450":"2px solid transparent",
+                    textShadow:lbSort===opt.key?"0 0 10px rgba(212,180,80,0.5)":"none",
+                    transition:"all 0.2s",whiteSpace:"nowrap",
+                  }}>{opt.icon} {opt.label}</button>
+                ))}
+              </div>
+
+              {lbLoading ? (
+                <div style={{textAlign:"center",padding:"40px 0",color:"rgba(212,180,80,0.5)",
+                  fontFamily:"'Rajdhani',sans-serif",fontSize:13,letterSpacing:2}}>
+                  Loading rankings...</div>
+              ) : sorted.length === 0 ? (
+                <div style={{textAlign:"center",padding:"40px 0",color:"rgba(212,180,80,0.4)",
+                  fontFamily:"'Rajdhani',sans-serif",fontSize:13,letterSpacing:2,fontStyle:"italic"}}>
+                  No warriors ranked yet — be the first!</div>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {sorted.map((p) => {
+                    const rs = RANK_STYLES[p.rank];
+                    const isTop3 = p.rank <= 3;
+                    return (
+                      <div key={p.rank} style={{
+                        display:"flex",alignItems:"center",gap:12,
+                        padding:isTop3?"14px 16px":"11px 14px",
+                        background:rs?.bg || "rgba(212,180,80,0.03)",
+                        border:`1.5px solid ${rs?.border || "rgba(212,180,80,0.1)"}`,
+                        borderRadius:10,
+                        boxShadow:rs?.glow || "none",
+                        transition:"all 0.25s",
+                        animation:isTop3?"fadeUp 0.6s ease both":"fadeUp 0.4s ease both",
+                        animationDelay:`${p.rank*0.06}s`,
+                      }}>
+                        {/* Rank */}
+                        <div style={{
+                          display:"flex",flexDirection:"column",alignItems:"center",
+                          minWidth:36,
+                        }}>
+                          {isTop3 ? (
+                            <span style={{fontSize:22,lineHeight:1,
+                              filter:`drop-shadow(0 0 8px ${rs?.color || '#fff'}88)`}}>{rs?.icon}</span>
+                          ) : (
+                            <span style={{
+                              fontFamily:"'Cinzel',serif",fontSize:16,fontWeight:900,
+                              color:"rgba(212,180,80,0.4)",
+                            }}>#{p.rank}</span>
+                          )}
+                        </div>
+
+                        {/* Player info */}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{
+                            fontFamily:"'Cinzel',serif",fontSize:isTop3?15:13,fontWeight:700,
+                            color:rs?.color || "rgba(255,255,255,0.75)",
+                            letterSpacing:1,
+                            textShadow:isTop3?`0 0 12px ${rs?.color}66`:"none",
+                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+                          }}>{p.username}</div>
+                          <div style={{
+                            display:"flex",gap:10,marginTop:4,flexWrap:"wrap",
+                          }}>
+                            <span style={{fontFamily:"'Rajdhani',sans-serif",fontSize:10,fontWeight:600,
+                              color:"rgba(212,180,80,0.5)",letterSpacing:1}}>
+                              🎮 {p.totalGames}
+                            </span>
+                            <span style={{fontFamily:"'Rajdhani',sans-serif",fontSize:10,fontWeight:600,
+                              color:"rgba(212,180,80,0.5)",letterSpacing:1}}>
+                              ⚔ {p.totalKills}
+                            </span>
+                            <span style={{fontFamily:"'Rajdhani',sans-serif",fontSize:10,fontWeight:600,
+                              color:"rgba(212,180,80,0.5)",letterSpacing:1}}>
+                              💀 {p.totalDeaths}
+                            </span>
+                            <span style={{fontFamily:"'Rajdhani',sans-serif",fontSize:10,fontWeight:600,
+                              color:"rgba(212,180,80,0.5)",letterSpacing:1}}>
+                              K/D {p.kd}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Primary stat value */}
+                        <div style={{
+                          display:"flex",flexDirection:"column",alignItems:"flex-end",
+                          flexShrink:0,
+                        }}>
+                          <span style={{
+                            fontFamily:"'Cinzel',serif",fontSize:isTop3?20:16,fontWeight:900,
+                            color:rs?.color || "#f0d060",
+                            textShadow:isTop3?`0 0 14px ${rs?.color}88`:"0 0 10px rgba(240,208,96,0.4)",
+                          }}>
+                            {lbSort==='kd' ? p.kd : lbSort==='avgTerritory' ? `${p.avgTerritory}%` : p[lbSort]}
+                          </span>
+                          <span style={{
+                            fontFamily:"'Rajdhani',sans-serif",fontSize:8,fontWeight:700,
+                            letterSpacing:2,textTransform:"uppercase",
+                            color:"rgba(212,180,80,0.4)",marginTop:2,
+                          }}>{SORT_OPTIONS.find(o=>o.key===lbSort)?.label}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   /* ═══════════════════════════════════════════════════════════════
      STATS VIEW
@@ -921,15 +1117,25 @@ export function Menu({ onJoinRoom, isSignedIn, user, getToken, signOut, openSign
               })}
             </div>
 
-            {/* ── STATS BUTTON ── */}
-            <button className="stats-btn-gol gol-stats-btn" onClick={openStats} style={{
-              width:"100%",marginTop:14,padding:"9px",
-              background:"rgba(212,180,80,0.06)",
-              border:"1.5px solid rgba(212,180,80,0.22)",borderRadius:8,
-              fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:3,
-              color:"#f0d060",fontWeight:600,textTransform:"uppercase",
-              textShadow:"0 0 12px rgba(240,208,96,0.4)",
-            }}>📊 &nbsp; My Stats</button>
+            {/* ── STATS & LEADERBOARD BUTTONS ── */}
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button className="stats-btn-gol gol-stats-btn" onClick={openStats} style={{
+                flex:1,padding:"9px",
+                background:"rgba(212,180,80,0.06)",
+                border:"1.5px solid rgba(212,180,80,0.22)",borderRadius:8,
+                fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:3,
+                color:"#f0d060",fontWeight:600,textTransform:"uppercase",
+                textShadow:"0 0 12px rgba(240,208,96,0.4)",
+              }}>📊 &nbsp; My Stats</button>
+              <button className="stats-btn-gol gol-stats-btn" onClick={openLeaderboard} style={{
+                flex:1,padding:"9px",
+                background:"rgba(255,215,0,0.05)",
+                border:"1.5px solid rgba(255,215,0,0.22)",borderRadius:8,
+                fontFamily:"'Cinzel',serif",fontSize:11,letterSpacing:3,
+                color:"#ffd700",fontWeight:600,textTransform:"uppercase",
+                textShadow:"0 0 12px rgba(255,215,0,0.4)",
+              }}>🏆 &nbsp; Leaderboard</button>
+            </div>
 
             {/* ── ERROR ── */}
             {error && (
