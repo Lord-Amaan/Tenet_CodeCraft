@@ -151,7 +151,7 @@ router.post('/sync-guest', requireClerkAuth, async (req, res) => {
 });
 
 // ── GET /api/leaderboard ────────────────────────────────────────────
-// Public: returns top players by best score
+// Public: returns top players ranked by best score, with full stats
 router.get('/leaderboard', async (req, res) => {
   try {
     if (!dbReady()) return res.status(503).json({ error: 'Database not connected' });
@@ -161,12 +161,15 @@ router.get('/leaderboard', async (req, res) => {
         $group: {
           _id: '$clerkUserId',
           bestScore: { $max: '$score' },
+          totalScore: { $sum: '$score' },
           totalKills: { $sum: '$kills' },
+          totalDeaths: { $sum: '$deaths' },
           totalGames: { $sum: 1 },
+          avgTerritory: { $avg: '$territoryPercent' },
         },
       },
       { $sort: { bestScore: -1 } },
-      { $limit: 20 },
+      { $limit: 50 },
     ]);
 
     // Attach usernames
@@ -179,8 +182,12 @@ router.get('/leaderboard', async (req, res) => {
       rank: i + 1,
       username: userMap[l._id] || 'Player',
       bestScore: l.bestScore,
+      totalScore: l.totalScore,
       totalKills: l.totalKills,
+      totalDeaths: l.totalDeaths,
       totalGames: l.totalGames,
+      avgTerritory: Math.round((l.avgTerritory || 0) * 10) / 10,
+      kd: l.totalDeaths > 0 ? Math.round((l.totalKills / l.totalDeaths) * 100) / 100 : l.totalKills,
     }));
 
     res.json({ success: true, leaderboard });
