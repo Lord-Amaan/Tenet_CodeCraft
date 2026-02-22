@@ -6,7 +6,7 @@ class SocketService {
     this.isConnected = false;
   }
 
-  connect(serverUrl = 'http://localhost:3000') {
+  connect(serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000') {
     return new Promise((resolve, reject) => {
       try {
         // If already connected, resolve immediately
