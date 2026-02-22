@@ -3,6 +3,7 @@
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 .gc-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -429,9 +430,9 @@
 
 /* ═══ Instructions Modal ═══════════════════════════════════════════════════ */
 .gc-instr-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 9999;
   background: rgba(4, 6, 4, 0.85);
   backdrop-filter: blur(6px);
   display: flex;
