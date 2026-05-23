@@ -1,7 +1,9 @@
-# Tenet_CodeCraft - Territory Wars
+# GameOfLands
 
-A multiplayer browser-based game where players compete to expand their territory and absorb other players.
-
+A multiplayer browser-based game where players compete to expand their territory.
+inspired by my favorite TV show Game of Thrones , this game will let u experience the thrill of conquering lands
+however unlike Thrones , Lands offer a very Light hearted environment so every age group audience can equally enjoy
+BEST ENJOYED WITH FREINDS.
 ## Project Structure
 
 ```
