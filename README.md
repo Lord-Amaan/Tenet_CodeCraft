@@ -4,7 +4,7 @@ A multiplayer browser-based game where players compete to expand their territory
 inspired by my favorite TV show Game of Thrones , this game will let u experience the thrill of conquering lands
 however unlike Thrones , Lands offer a very Light hearted environment so every age group audience can equally enjoy
 <br>
-BEST ENJOYED WITH FREINDS.
+FOR THE BEST EXPERIENCE PLAY WITH FREINDS.
 ## Project Structure
 
 ```
